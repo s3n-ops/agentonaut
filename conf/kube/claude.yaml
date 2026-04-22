@@ -1,0 +1,55 @@
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: claude-pod
+  labels:
+    app: claude
+  annotations:
+    io.podman.annotations.userns: keep-id
+    container.apparmor.security.beta.kubernetes.io/claude-code: unconfined
+    container.seccomp.security.alpha.kubernetes.io/claude-code: unconfined
+spec:
+  containers:
+    - name: claude-code
+      image: localhost/claude-code-custom:latest
+      stdin: true
+      tty: true
+      volumeMounts:
+        - name: workspace
+          mountPath: /workspace:z
+        - name: agent-data
+          mountPath: /home/claude/.claude:z
+        - name: agent-config
+          mountPath: /home/claude/.claude.json:z
+      env:
+        - name: CLAUDE_WORKSPACE
+          value: /workspace
+      securityContext:
+        allowPrivilegeEscalation: false
+        runAsUser: 1000
+        runAsGroup: 1000
+        seccompProfile:
+          type: Unconfined
+        capabilities:
+          drop:
+            - NET_RAW
+      imagePullPolicy: Never
+
+  volumes:
+    - name: workspace
+      hostPath:
+        path: /workspace
+        type: Directory
+    - name: agent-data
+      hostPath:
+        path: ~/.local/share/agentonaut/claude
+        type: DirectoryOrCreate
+    - name: agent-config
+      hostPath:
+        path: ~/.config/agentonaut/claude/claude.json
+        type: FileOrCreate
+
+  restartPolicy: Never
+  dnsPolicy: ClusterFirst
+  shareProcessNamespace: false

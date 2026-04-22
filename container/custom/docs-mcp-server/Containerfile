@@ -1,0 +1,13 @@
+# Docs MCP Server - Customized version
+
+FROM localhost/docs-mcp-server-contrib:latest
+
+LABEL org.opencontainers.image.title="Docs MCP Server (Customized)"
+LABEL org.opencontainers.image.description="Documentation indexing and search via Model Context Protocol"
+LABEL org.opencontainers.image.source="https://github.com/arabold/docs-mcp-server"
+
+# Add customizations here if needed
+
+EXPOSE 6280
+
+VOLUME ["/data"]

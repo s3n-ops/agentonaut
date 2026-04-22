@@ -1,0 +1,51 @@
+# Nushell MCP Server - Native HTTP Transport
+
+FROM debian:trixie-slim
+
+LABEL org.opencontainers.image.title="Nushell MCP Server"
+LABEL org.opencontainers.image.description="Nushell MCP Server with native HTTP transport"
+LABEL org.opencontainers.image.source="https://github.com/nushell/nushell"
+
+ENV DEBIAN_FRONTEND=noninteractive \
+    NU_LOG_LEVEL=info
+
+# Disable problematic APT hooks for rootless Podman
+RUN rm -f /etc/apt/apt.conf.d/docker-clean \
+    && echo 'APT::Update::Post-Invoke-Success {};' > /etc/apt/apt.conf.d/docker-no-clean \
+    && echo 'APT::Update::Post-Invoke {};' >> /etc/apt/apt.conf.d/docker-no-clean
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+    ca-certificates \
+    libssl3 \
+    jq \
+    curl \
+    tar \
+    gzip
+
+# Create nushell user with UID/GID 1000
+RUN groupadd --gid 1000 nushell \
+    && useradd --uid 1000 --gid 1000 --home /home/nushell --create-home nushell
+
+# Install latest Nushell from GitHub releases
+RUN NUSHELL_VERSION=$(curl -s https://api.github.com/repos/nushell/nushell/releases/latest | jq -r .tag_name) \
+    && curl -LO "https://github.com/nushell/nushell/releases/download/${NUSHELL_VERSION}/nu-${NUSHELL_VERSION}-x86_64-unknown-linux-gnu.tar.gz" \
+    && curl -LO "https://github.com/nushell/nushell/releases/download/${NUSHELL_VERSION}/SHA256SUMS" \
+    && sha256sum --ignore-missing -c SHA256SUMS \
+    && tar xzf "nu-${NUSHELL_VERSION}-x86_64-unknown-linux-gnu.tar.gz" \
+    && mv "nu-${NUSHELL_VERSION}-x86_64-unknown-linux-gnu/nu" /usr/local/bin/ \
+    && rm -rf "nu-${NUSHELL_VERSION}-x86_64-unknown-linux-gnu"* SHA256SUMS
+
+RUN nu --version
+
+RUN mkdir -p /app && chown nushell:nushell /app
+
+WORKDIR /app
+
+USER nushell
+
+EXPOSE 8001
+
+ENTRYPOINT ["nu"]
+
+CMD ["--mcp", "--mcp-transport", "http", "--mcp-port", "8001"]

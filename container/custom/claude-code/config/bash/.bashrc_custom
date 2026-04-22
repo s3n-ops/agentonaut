@@ -1,0 +1,9 @@
+# Custom bashrc for claude-code container
+
+# Change to CLAUDE_WORKSPACE if set and not already there
+if [ -n "$CLAUDE_WORKSPACE" ] && [ "$PWD" != "$CLAUDE_WORKSPACE" ]; then
+    cd "$CLAUDE_WORKSPACE" || true
+fi
+
+# Aliases
+alias ll='ls -Fahl'

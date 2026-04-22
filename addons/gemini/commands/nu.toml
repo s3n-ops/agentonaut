@@ -1,0 +1,14 @@
+description = "Interact with the mcp-nushell server"
+prompt = """
+Execute the user's request using the `mcp-nushell` server tools.
+
+User Request: {{args}}
+
+**Important Context:**
+The `mcp-nushell` server runs inside a container that has **read-only** access to the `/workspace` directory structure.
+- It sees the same files as the host at `/workspace`.
+- It CANNOT modify files.
+- It is perfect for querying Nushell state, running read-only scripts, or checking syntax/behavior.
+
+Use `evaluate` to run Nushell code.
+"""

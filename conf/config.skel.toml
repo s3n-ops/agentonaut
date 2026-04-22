@@ -1,0 +1,508 @@
+#
+# Profile Architecture & Relationships
+#
+# profile.agent.* (claude, gemini)
+#   └─ 1:1 profile.container.* (claude, gemini)
+#
+# profile.kube.* (minimal, full, nushell, docs)   ← agent-agnostic MCP sets
+#   └─ 0:N profile.mcp.* (nushell, docs-mcp-server)
+#          └─ 1:1 profile.container.* (mcp-*)
+#
+# profile.docs.* (standalone: nushell, ansible, podman, claude-code)
+#
+# Design:
+#  • Kube profiles define which MCP servers run alongside any agent.
+#  • Agent profiles define the container image and data paths.
+#  • The combination of agent + kube profile is chosen at launch time.
+#  • Nested tables with implicit IDs from TOML keys.
+#  • CLI accepts short form (claude) resolved to namespace.
+#  • References use simple names without prefixes.
+#
+
+[agentonaut]
+path = "."
+default_agent = "gemini"
+
+[profile.agent.gemini]
+container = "gemini"
+yaml_file = "conf/kube/gemini.yaml"
+data_path_host = "~/.local/share/agentonaut/gemini"
+data_path_container = "/home/gemini/.gemini"
+config_path = "~/.config/agentonaut/gemini/gemini.json"
+chat_base_path = "~/Documents/agentonaut/gemini"
+mcp_command = "gemini mcp add --transport {transport} {name} {url}"
+
+[profile.agent.claude]
+container = "claude"
+yaml_file = "conf/kube/claude.yaml"
+data_path_host = "~/.local/share/agentonaut/claude"
+data_path_container = "/home/claude/.claude"
+config_path = "~/.config/agentonaut/claude/claude.json"
+chat_base_path = "~/Documents/agentonaut/claude"
+mcp_command = "claude mcp add --transport {transport} {name} {url}"
+
+[agentonaut.podman]
+network = "agentonaut-network"
+pod_name = "agentonaut-pod"
+
+
+#
+# Podman Kube YAML Profiles
+#
+# Agent-agnostic MCP sets: define which MCP servers run alongside any agent.
+# The agent determines the container image; the kube profile determines the MCPs.
+#
+[kube]
+default_profile = "minimal"
+tmp_file_path = "/tmp/agentonaut/kube.yaml"
+template_dir = "conf/kube/templates"
+
+[profile.kube.minimal]
+description = "Agent only, no MCPs"
+mcp_profiles = []
+
+[profile.kube.full]
+description = "Nushell + Docs MCP"
+mcp_profiles = ["nushell", "docs-mcp-server"]
+
+[profile.kube.nushell]
+description = "Nushell MCP only"
+mcp_profiles = ["nushell"]
+
+[profile.kube.docs]
+description = "Docs MCP only"
+mcp_profiles = ["docs-mcp-server"]
+
+[profile.mcp.nushell]
+container = "mcp-nushell"
+yaml_file = "conf/kube/mcp-nushell.yaml"
+name = "mcp-nushell"
+transport = "http"
+url = "http://mcp-nushell:8001/mcp"
+
+[profile.mcp.docs-mcp-server]
+container = "docs-mcp-server"
+yaml_file = "conf/kube/docs-mcp-server.yaml"
+name = "docs-mcp-server"
+transport = "http"
+url = "http://docs-mcp-server:6280/mcp"
+web_url = "http://127.0.0.1:6280"
+
+#
+# Documentation Profiles
+#
+# Profiles for downloading docs repositories and indexing them with docs-mcp-server.
+#
+# repo:         Git repository URL (optional; omit for web-only docs)
+# target_dir:   Local directory to clone repository into
+# branch:       Git branch to checkout (default: "main")
+# depth:        Optional shallow clone depth (null = full clone)
+# description:  Human-readable description
+# library_name: Name used to register the library in docs-mcp-server
+# mcp_url:      URL passed to docs-mcp-server scrape (file:/// or https://)
+
+[docs]
+base_dir = "~/Documents/agentonaut/offline-documentation"
+
+[profile.docs.nushell]
+repo = "https://github.com/nushell/nushell.github.io.git"
+target_dir = "nushell"
+branch = "main"
+depth = 1
+description = "Nushell official documentation website"
+library_name = "nushell-documentation"
+mcp_url = "file:///docs/nushell/book"
+
+[profile.docs.ansible]
+repo = "https://github.com/ansible/ansible-documentation.git"
+target_dir = "ansible"
+branch = "stable-2.20"
+depth = 1
+description = "Official Ansible documentation"
+library_name = "ansible-documentation"
+mcp_url = "file:///docs/ansible/docs/docsite/rst"
+
+[profile.docs.podman]
+repo = "https://github.com/containers/podman.git"
+target_dir = "podman"
+branch = "main"
+depth = 1
+description = "Official Podman documentation"
+library_name = "podman-documentation"
+mcp_url = "file:///docs/podman/docs"
+
+[profile.docs.claude-code]
+repo = "https://github.com/ericbuess/claude-code-docs.git"
+target_dir = "claude-code"
+branch = "main"
+depth = 1
+description = "Claude Code Documentation"
+library_name = "claude-code-documentation"
+mcp_url = "file:///docs/claude-code/docs"
+
+[profile.docs.resticprofile]
+repo = "https://github.com/creativeprojects/resticprofile.git"
+target_dir = "resticprofile"
+branch = "master"
+depth = 1
+description = "Resticprofile documentation"
+library_name = "resticprofile-documentation"
+mcp_url = "file:///docs/resticprofile/docs"
+
+[profile.docs.restic]
+repo = "https://github.com/restic/restic.git"
+target_dir = "restic"
+branch = "master"
+depth = 1
+description = "Restic backup documentation"
+library_name = "restic-documentation"
+mcp_url = "file:///docs/restic/doc"
+
+[profile.docs.nushell-scripts]
+repo = "https://github.com/nushell/nu_scripts.git"
+target_dir = "nushell-scripts"
+branch = "main"
+depth = 1
+description = "Official Nushell scripts collection"
+library_name = "nushell-scripts"
+mcp_url = "file:///docs/nushell-scripts"
+
+[profile.docs.nix]
+repo = "https://github.com/NixOS/nix.git"
+target_dir = "nix"
+branch = "master"
+depth = 1
+description = "Nix package manager documentation"
+library_name = "nix-documentation"
+mcp_url = "file:///docs/nix/doc/manual/source"
+
+[profile.docs.flake-parts-website]
+repo = "https://github.com/hercules-ci/flake.parts-website.git"
+target_dir = "flake-parts-website"
+branch = "main"
+depth = 1
+description = "Flake.parts documentation website"
+library_name = "flake-parts-documentation"
+mcp_url = "file:///docs/flake-parts-website/site/src"
+
+[profile.docs.flake-parts]
+repo = "https://github.com/hercules-ci/flake-parts.git"
+target_dir = "flake-parts"
+branch = "main"
+depth = 1
+description = "Flake.parts module system"
+library_name = "flake-parts"
+mcp_url = "file:///docs/flake-parts"
+
+[profile.docs.hashicorp]
+repo = "https://github.com/hashicorp/web-unified-docs.git"
+target_dir = "hashicorp"
+branch = "main"
+depth = 1
+description = "HashiCorp unified documentation (Terraform, Vault, Consul, ...)"
+library_name = "hashicorp-documentation"
+mcp_url = "file:///docs/hashicorp"
+
+[profile.docs.grafana]
+repo = "https://github.com/grafana/grafana.git"
+target_dir = "grafana"
+branch = "main"
+depth = 1
+description = "Grafana documentation"
+library_name = "grafana-documentation"
+mcp_url = "file:///docs/grafana/docs/sources"
+
+[profile.docs.prometheus]
+repo = "https://github.com/prometheus/docs.git"
+target_dir = "prometheus"
+branch = "main"
+depth = 1
+description = "Prometheus monitoring documentation"
+library_name = "prometheus-documentation"
+mcp_url = "file:///docs/prometheus"
+
+[profile.docs.kubernetes]
+repo = "https://github.com/kubernetes/website.git"
+target_dir = "kubernetes"
+branch = "main"
+depth = 1
+description = "Kubernetes documentation"
+library_name = "kubernetes-documentation"
+mcp_url = "file:///docs/kubernetes"
+
+[profile.docs.docker]
+repo = "https://github.com/docker/docs.git"
+target_dir = "docker"
+branch = "main"
+depth = 1
+description = "Docker documentation"
+library_name = "docker-documentation"
+mcp_url = "file:///docs/docker"
+
+[profile.docs.helm]
+repo = "https://github.com/helm/helm-www.git"
+target_dir = "helm"
+branch = "main"
+depth = 1
+description = "Helm package manager documentation"
+library_name = "helm-documentation"
+mcp_url = "file:///docs/helm"
+
+[profile.docs.argocd]
+repo = "https://github.com/argoproj/argo-cd.git"
+target_dir = "argocd"
+branch = "master"
+depth = 1
+description = "Argo CD GitOps documentation"
+library_name = "argocd-documentation"
+mcp_url = "file:///docs/argocd/docs"
+
+[profile.docs.cilium]
+repo = "https://github.com/cilium/cilium.git"
+target_dir = "cilium"
+branch = "main"
+depth = 1
+description = "Cilium eBPF networking documentation"
+library_name = "cilium-documentation"
+mcp_url = "file:///docs/cilium/Documentation"
+
+[profile.docs.wireguard]
+repo = "https://github.com/WireGuard/wireguard-linux.git"
+target_dir = "wireguard"
+branch = "stable"
+depth = 1
+description = "WireGuard VPN documentation"
+library_name = "wireguard-documentation"
+mcp_url = "file:///docs/wireguard/Documentation"
+
+[profile.docs.k3s]
+repo = "https://github.com/k3s-io/docs.git"
+target_dir = "k3s"
+branch = "main"
+depth = 1
+description = "K3s lightweight Kubernetes documentation"
+library_name = "k3s-documentation"
+mcp_url = "file:///docs/k3s/docs"
+
+[profile.docs.systemd]
+repo = "https://github.com/systemd/systemd.git"
+target_dir = "systemd"
+branch = "main"
+depth = 1
+description = "systemd documentation"
+library_name = "systemd-documentation"
+mcp_url = "file:///docs/systemd/docs"
+
+[profile.docs.traefik]
+repo = "https://github.com/traefik/traefik.git"
+target_dir = "traefik"
+branch = "master"
+depth = 1
+description = "Traefik reverse proxy documentation"
+library_name = "traefik-documentation"
+mcp_url = "file:///docs/traefik/docs"
+
+[profile.docs.caddy]
+repo = "https://github.com/caddyserver/website.git"
+target_dir = "caddy"
+branch = "master"
+depth = 1
+description = "Caddy web server documentation"
+library_name = "caddy-documentation"
+mcp_url = "file:///docs/caddy"
+
+[profile.docs.libvirt]
+repo = "https://gitlab.com/libvirt/libvirt.git"
+target_dir = "libvirt"
+branch = "master"
+depth = 1
+description = "libvirt virtualization API documentation"
+library_name = "libvirt-documentation"
+mcp_url = "file:///docs/libvirt/docs"
+
+[profile.docs.qemu]
+repo = "https://github.com/qemu/qemu.git"
+target_dir = "qemu"
+branch = "master"
+depth = 1
+description = "QEMU machine emulator and virtualizer documentation"
+library_name = "qemu-documentation"
+mcp_url = "file:///docs/qemu/docs"
+
+[profile.docs.bash-manual]
+target_dir = ""
+description = "GNU Bash manual (web)"
+library_name = "bash-manual"
+mcp_url = "https://www.gnu.org/software/bash/manual/bash.txt"
+
+[profile.docs.minijinja]
+repo = "https://github.com/mitsuhiko/minijinja.git"
+target_dir = "minijinja"
+branch = "main"
+depth = 1
+description = "MiniJinja Rust templating engine"
+library_name = "minijinja-documentation"
+mcp_url = "file:///docs/minijinja/minijinja"
+
+[profile.docs.yaml]
+repo = "https://github.com/yaml/yaml-spec.git"
+target_dir = "yaml-spec"
+branch = "main"
+depth = 1
+description = "YAML language specification"
+library_name = "yaml-specification"
+mcp_url = "file:///docs/yaml-spec/spec"
+
+[profile.docs.toml]
+repo = "https://github.com/toml-lang/toml.git"
+target_dir = "toml"
+branch = "main"
+depth = 1
+description = "TOML configuration language specification"
+library_name = "toml-specification"
+mcp_url = "file:///docs/toml"
+
+[profile.docs.commonmark]
+repo = "https://github.com/commonmark/commonmark-spec.git"
+target_dir = "commonmark-spec"
+branch = "master"
+depth = 1
+description = "CommonMark Markdown specification"
+library_name = "commonmark-specification"
+mcp_url = "file:///docs/commonmark-spec"
+
+[profile.docs.python]
+repo = "https://github.com/python/cpython.git"
+target_dir = "python"
+branch = "main"
+depth = 1
+description = "CPython official documentation"
+library_name = "python-documentation"
+mcp_url = "file:///docs/python/Doc"
+
+[profile.docs.golang]
+repo = "https://github.com/golang/go.git"
+target_dir = "golang"
+branch = "master"
+depth = 1
+description = "Go programming language documentation"
+library_name = "golang-documentation"
+mcp_url = "file:///docs/golang/doc"
+
+[profile.docs.rust]
+repo = "https://github.com/rust-lang/book.git"
+target_dir = "rust"
+branch = "main"
+depth = 1
+description = "The Rust Programming Language book"
+library_name = "rust-book"
+mcp_url = "file:///docs/rust/src"
+
+
+# Container Build Profiles
+# Container image definitions for building
+# origin: "upstream" (from external repo) or "local" (from this project)
+# repo: Git repository URL (only for origin = "upstream")
+# local_dir: Local directory containing container image definition
+# containerfile: Path to Containerfile/Dockerfile (relative to local_dir)
+# context: Build context directory (relative to local_dir, where COPY commands resolve from)
+# image_tag: Full image tag for the built image
+# base_image_override: Optional base image override (replaces FROM statement in containerfile)
+# description: Human-readable description
+
+[profile.container.claude-contrib]
+origin = "upstream"
+repo = "https://github.com/anthropics/claude-code"
+local_dir = "container/contrib/claude-code"
+containerfile = ".devcontainer/Dockerfile"
+context = ".devcontainer"
+image_tag = "localhost/claude-code-devcontainer:latest"
+base_image_override = "node:20-trixie"
+description = "Base Claude Code devcontainer image from upstream"
+
+[profile.container.claude]
+origin = "local"
+local_dir = "container/custom/claude-code"
+containerfile = "Containerfile"
+context = "."
+image_tag = "localhost/claude-code:latest"
+container_name = "claude-code"
+home_path = "/home/claude"
+description = "Customized Claude Code container image"
+version_check = { repo = "https://github.com/anthropics/claude-code", build_arg = "CLAUDE_VERSION" }
+depends_on = []
+podman_args = []
+container_args = []
+podman_mounts = []
+env_vars = { CLAUDE_CODE_ENABLE_TELEMETRY = "0" }
+
+[profile.container.gemini-contrib]
+origin = "upstream"
+repo = "https://github.com/google-gemini/gemini-cli"
+local_dir = "container/contrib/gemini"
+containerfile = "Dockerfile"
+context = "."
+image_tag = "localhost/gemini-contrib:latest"
+description = "Official Gemini CLI container image from upstream"
+
+[profile.container.gemini]
+origin = "local"
+local_dir = "container/custom/gemini"
+containerfile = "Containerfile"
+context = "."
+image_tag = "localhost/gemini:latest"
+home_path = "/home/gemini"
+description = "Google Gemini CLI container"
+depends_on = []
+version_check = { repo = "https://github.com/google-gemini/gemini-cli", build_arg = "GEMINI_VERSION" }
+podman_args = ["--security-opt", "seccomp=unconfined"]
+podman_mounts = [
+    { source = "~/.local/share/agentonaut/gemini", target = "/home/gemini/.gemini", mode = "rw" },
+]
+env_vars = { GEMINI_TELEMETRY_ENABLED = "false" }
+
+[profile.container.mcp-nushell]
+origin = "local"
+local_dir = "container/custom/mcp-nushell"
+containerfile = "Containerfile"
+context = "."
+image_tag = "localhost/mcp-nushell:latest"
+container_name = "mcp-nushell"
+description = "Nushell MCP Server with native HTTP transport (Official Binary)"
+container_args = ["--mcp", "--mcp-transport", "http", "--mcp-port", "8001"]
+podman_args = []
+env_vars = { NU_LOG_LEVEL = "info" }
+version_check = { repo = "https://github.com/nushell/nushell", build_arg = "NUSHELL_VERSION" }
+
+[profile.container.docs-mcp-server-contrib]
+origin = "upstream"
+repo = "https://github.com/arabold/docs-mcp-server"
+local_dir = "container/contrib/docs-mcp-server"
+containerfile = "Dockerfile"
+context = "."
+image_tag = "localhost/docs-mcp-server-contrib:latest"
+description = "Docs MCP Server from upstream repository"
+
+[profile.container.docs-mcp-server]
+origin = "local"
+local_dir = "container/custom/docs-mcp-server"
+containerfile = "Containerfile"
+context = "."
+image_tag = "localhost/docs-mcp-server:latest"
+container_name = "docs-mcp-server"
+description = "Customized Docs MCP Server for documentation indexing"
+depends_on = ["docs-mcp-server-contrib"]
+podman_args = ["--detach", "--security-opt", "seccomp=unconfined"]
+container_args = [
+    "--protocol",
+    "http",
+    "--host",
+    "0.0.0.0",
+    "--port",
+    "6280",
+    "--telemetry",
+    "false",
+]
+podman_mounts = [
+    { source = "docs-mcp-server-data", target = "/data", mode = "rw" },
+]

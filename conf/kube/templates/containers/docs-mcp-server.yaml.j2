@@ -1,0 +1,47 @@
+    #
+    # Docs MCP Server (background sidecar)
+    #
+    - name: {{ mcp.container_name }}
+      image: localhost/docs-mcp-server:latest
+      volumeMounts:
+        - name: docs-mcp-server-data
+          mountPath: /data:z
+        - name: offline-documentation
+          mountPath: /docs:z
+          readOnly: true
+      env:
+        - name: DOCS_MCP_HOST
+          value: "0.0.0.0"
+        - name: DOCS_MCP_PROTOCOL
+          value: "http"
+        - name: DOCS_MCP_PORT
+          value: "6280"
+        - name: DOCS_MCP_WEB_PORT
+          value: "6281"
+        - name: DOCS_MCP_TELEMETRY
+          value: "false"
+{% if mcp.args is defined and mcp.args %}
+      args:
+{% for arg in mcp.args %}
+        - "{{ arg }}"
+{% endfor %}
+{% endif %}
+      ports:
+        - name: mcp-http
+          containerPort: 6280
+          hostPort: 6280
+          protocol: TCP
+        - name: web-interface
+          containerPort: 6281
+          hostPort: 6281
+          protocol: TCP
+      securityContext:
+        allowPrivilegeEscalation: false
+        runAsUser: 1000
+        runAsGroup: 1000
+        seccompProfile:
+          type: Unconfined
+        capabilities:
+          drop:
+            - NET_RAW
+      imagePullPolicy: Never

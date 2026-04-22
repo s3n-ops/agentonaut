@@ -1,0 +1,16 @@
+description = "Generate a concise, professional git commit message"
+prompt = """
+Generate a git commit message for the current staged changes.
+
+User Context/Hint: {{args}}
+
+Steps:
+1. Review the changes using `git diff --staged` (or `git diff HEAD` if nothing is staged).
+2. Draft a commit message that adheres to these rules:
+   - **Concise:** Preferably a single line (under 72 characters preferred).
+   - **Complete:** Captures the 'why' and 'what' of the change.
+   - **Professional:** No emojis, no fluff, no conversational filler.
+   - **English:** Write the message in English.
+
+Output ONLY the commit message in a code block.
+"""

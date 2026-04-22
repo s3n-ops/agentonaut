@@ -1,0 +1,52 @@
+    #
+    # Nushell MCP (background sidecar)
+    # Read-only mounts: Nushell can read and evaluate but not modify workspace files
+    #
+    - name: {{ mcp.container_name }}
+      image: localhost/mcp-nushell:latest
+      volumeMounts:
+        - name: workspace
+          mountPath: {{ workspace_container_path }}:z
+          readOnly: true
+        - name: agent-data
+          mountPath: {{ agent_data_path_container }}:z
+          readOnly: true
+{% if agent_config_mount_path is defined and agent_config_mount_path %}
+        - name: agent-config
+          mountPath: {{ agent_config_mount_path }}:z
+          readOnly: true
+{% endif %}
+{% for workspace in additional_workspaces %}
+        - name: workspace-additional-{{ loop.index0 }}
+          mountPath: {{ workspace.container_path }}:z
+{% endfor %}
+      env:
+        - name: NU_LOG_LEVEL
+          value: "info"
+        - name: {{ agent_workspace_env }}
+          value: {{ workspace_container_path }}
+{% if additional_workspaces %}
+        - name: WORKSPACE_ADDITIONAL
+          value: {{ additional_workspaces | map(attribute='container_path') | join(':') }}
+{% endif %}
+      workingDir: {{ workspace_container_path }}
+{% if mcp.args is defined and mcp.args %}
+      args:
+{% for arg in mcp.args %}
+        - "{{ arg }}"
+{% endfor %}
+{% endif %}
+      ports:
+        - name: mcp-http
+          containerPort: 8001
+          protocol: TCP
+      securityContext:
+        allowPrivilegeEscalation: false
+        runAsUser: 1000
+        runAsGroup: 1000
+        seccompProfile:
+          type: Unconfined
+        capabilities:
+          drop:
+            - NET_RAW
+      imagePullPolicy: Never

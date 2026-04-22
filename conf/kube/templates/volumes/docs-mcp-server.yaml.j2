@@ -1,0 +1,8 @@
+    - name: docs-mcp-server-data
+      hostPath:
+        path: {{ docs_mcp_server_data_path }}
+        type: DirectoryOrCreate
+    - name: offline-documentation
+      hostPath:
+        path: {{ offline_documentation_path }}
+        type: Directory

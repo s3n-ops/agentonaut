@@ -1,0 +1,24 @@
+# nu-lint configuration for agentonaut-cli
+#
+# Rules: https://codeberg.org/wvhulle/nu-lint
+
+skip_external_parse_errors = false
+explicit_optional_access = false
+
+[rules]
+# Disabled because project style mandates quotes for safety in arguments,
+# and we don't want these hints to clutter the reports.
+string_may_be_bare = "off"
+
+# Disabled because e.g. podman hat an internal Nushell module and an external command,
+# but the linter still identifies the '^podman' as unnecessary
+remove_hat_not_builtin = "off"
+
+# Disabled beacause it misidentifies short lists as long lists.
+# reflow_wide_lists = "off"
+
+# Enforce Nushell standard for constants
+screaming_snake_constants = "warning"
+
+# Enforce clean pipelines (no mixed output)
+print_and_return_data = "hint"

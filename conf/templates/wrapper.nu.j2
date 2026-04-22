@@ -1,0 +1,17 @@
+#!/usr/bin/env nu
+
+def --wrapped main [...args: string] {
+    # Export the wrapper's path so the main script can use it as a reference,
+    # for example when spawning new isolated instances via sudo.
+    $env.WRAPPER_PATH = $env.PROCESS_PATH
+
+    # Note: Don't use $env.HOME in the following paths, because of sudo calls.
+    # Even with `sudo --preserve-env=HOME,PATH` within your Nushell script, it will cause trouble.
+    # Use absolute paths in your wrapper script instead, to be sure nothing breaks.
+    const mod_path = "{{ project_root }}/mod"
+    const lib_path = "{{ project_root }}/lib"
+    const script_path = "{{ project_root }}/bin/agentonaut.nu"
+
+    let lib_dirs = ([$mod_path, $lib_path] | str join (char record_sep))
+    exec nu --include-path $lib_dirs $script_path ...$args
+}

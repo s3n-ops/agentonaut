@@ -1,0 +1,88 @@
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: {{ agentonaut_podman_pod_name }}
+  labels:
+    app: {{ agent_name }}
+  annotations:
+    io.podman.annotations.userns: keep-id
+    container.apparmor.security.beta.kubernetes.io/{{ container_name }}: unconfined
+    container.seccomp.security.alpha.kubernetes.io/{{ container_name }}: unconfined
+{% for mcp in mcps %}
+    container.apparmor.security.beta.kubernetes.io/{{ mcp.container_name }}: unconfined
+    container.seccomp.security.alpha.kubernetes.io/{{ mcp.container_name }}: unconfined
+{% endfor %}
+spec:
+  containers:
+    #
+    # Agent container (interactive shell)
+    #
+    - name: {{ container_name }}
+      image: {{ container_image }}
+      stdin: true
+      tty: true
+      volumeMounts:
+        - name: workspace
+          mountPath: {{ workspace_container_path }}:z
+        - name: agent-data
+          mountPath: {{ agent_data_path_container }}:z
+{% if agent_config_mount_path is defined and agent_config_mount_path %}
+        - name: agent-config
+          mountPath: {{ agent_config_mount_path }}:z
+{% endif %}
+{% for workspace in additional_workspaces %}
+        - name: workspace-additional-{{ loop.index0 }}
+          mountPath: {{ workspace.container_path }}:z
+{% endfor %}
+      env:
+        - name: {{ agent_workspace_env }}
+          value: {{ workspace_container_path }}
+{% if additional_workspaces %}
+        - name: WORKSPACE_ADDITIONAL
+          value: {{ additional_workspaces | map(attribute='container_path') | join(':') }}
+{% endif %}
+      workingDir: {{ workspace_container_path }}
+      securityContext:
+        allowPrivilegeEscalation: false
+        runAsUser: 1000
+        runAsGroup: 1000
+        seccompProfile:
+          type: Unconfined
+        capabilities:
+          drop:
+            - NET_RAW
+      imagePullPolicy: Never
+
+{% for mcp in mcps %}
+{% include "containers/" + mcp.local_id + ".yaml.j2" %}
+{% endfor %}
+
+  volumes:
+    - name: workspace
+      hostPath:
+        path: {{ workspace_path }}
+        type: Directory
+    - name: agent-data
+      hostPath:
+        path: {{ agent_data_path_host }}
+        type: DirectoryOrCreate
+{% if agent_config_path is defined and agent_config_path %}
+    - name: agent-config
+      hostPath:
+        path: {{ agent_config_path }}
+        type: FileOrCreate
+{% endif %}
+{% for workspace in additional_workspaces %}
+    - name: workspace-additional-{{ loop.index0 }}
+      hostPath:
+        path: {{ workspace.host_path }}
+        type: Directory
+{% endfor %}
+{% for mcp in mcps %}
+{% include "volumes/" + mcp.local_id + ".yaml.j2" %}
+{% endfor %}
+
+  restartPolicy: Never
+  dnsPolicy: ClusterFirst
+  shareProcessNamespace: false

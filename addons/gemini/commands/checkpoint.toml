@@ -1,0 +1,16 @@
+description = "Save session progress to a markdown document"
+prompt = """
+Write a concise markdown document summarizing the current session.
+
+Include:
+1. What was accomplished
+2. Files created or modified (with paths)
+3. Key decisions
+4. Next steps
+
+Steps:
+1. Run `date -u +%Y-%m-%dT%H-%M-%S` to get the current timestamp.
+2. Save the document to `CHECKPOINT-<timestamp>.md` using `write_file`.
+
+Be precise and efficient. Enable seamless handoff to the next session.
+"""

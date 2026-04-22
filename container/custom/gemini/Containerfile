@@ -1,0 +1,149 @@
+FROM docker.io/library/node:20-trixie-slim
+
+# Build stage for nu_plugin_formats
+FROM rust:slim AS nu-plugin-builder
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+        gcc \
+        g++ \
+        make \
+        pkg-config \
+        libssl-dev \
+        ca-certificates \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN rustup update stable \
+    && cargo install nu_plugin_formats --locked \
+    && cargo install nu-lint --locked
+
+FROM docker.io/library/node:20-trixie-slim
+
+USER root
+
+RUN usermod -l gemini node \
+    && groupmod -n gemini node \
+    && usermod -d /home/gemini -m gemini
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+        bc \
+        ca-certificates \
+        curl \
+        dnsutils \
+        gh \
+        git \
+        jq \
+        less \
+        lsof \
+        maildir-utils \
+        man-db \
+        neovim \
+        pipx \
+        psl \
+        psmisc \
+        python3 \
+        python3-pip \
+        python3-venv \
+        rsync \
+        socat \
+        sqlite3 \
+        unzip \
+        xz-utils \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install latest Nushell from GitHub releases
+RUN NUSHELL_VERSION=$(curl -s https://api.github.com/repos/nushell/nushell/releases/latest | jq -r .tag_name) \
+    && curl -LO "https://github.com/nushell/nushell/releases/download/${NUSHELL_VERSION}/nu-${NUSHELL_VERSION}-x86_64-unknown-linux-gnu.tar.gz" \
+    && curl -LO "https://github.com/nushell/nushell/releases/download/${NUSHELL_VERSION}/SHA256SUMS" \
+    && sha256sum --ignore-missing -c SHA256SUMS \
+    && tar xzf "nu-${NUSHELL_VERSION}-x86_64-unknown-linux-gnu.tar.gz" \
+    && mv "nu-${NUSHELL_VERSION}-x86_64-unknown-linux-gnu/nu" /usr/local/bin/ \
+    && if [ -f /usr/bin/nu ]; then ln -sf /usr/local/bin/nu /usr/bin/nu; fi \
+    && rm -rf "nu-${NUSHELL_VERSION}-x86_64-unknown-linux-gnu"* SHA256SUMS
+
+# Install latest Ripgrep from GitHub releases
+RUN RIPGREP_VERSION=$(curl -s https://api.github.com/repos/BurntSushi/ripgrep/releases/latest | jq -r .tag_name) \
+    && curl -LO "https://github.com/BurntSushi/ripgrep/releases/download/${RIPGREP_VERSION}/ripgrep-${RIPGREP_VERSION}-x86_64-unknown-linux-musl.tar.gz" \
+    && curl -LO "https://github.com/BurntSushi/ripgrep/releases/download/${RIPGREP_VERSION}/ripgrep-${RIPGREP_VERSION}-x86_64-unknown-linux-musl.tar.gz.sha256" \
+    && sha256sum -c "ripgrep-${RIPGREP_VERSION}-x86_64-unknown-linux-musl.tar.gz.sha256" \
+    && tar xzf "ripgrep-${RIPGREP_VERSION}-x86_64-unknown-linux-musl.tar.gz" \
+    && mv "ripgrep-${RIPGREP_VERSION}-x86_64-unknown-linux-musl/rg" /usr/local/bin/ \
+    && rm -rf "ripgrep-${RIPGREP_VERSION}-x86_64-unknown-linux-musl"*
+
+# Install latest minijinja-cli from GitHub releases
+RUN MINIJINJA_VERSION=$(curl -s https://api.github.com/repos/mitsuhiko/minijinja/releases/latest | jq -r .tag_name) \
+    && curl -LO "https://github.com/mitsuhiko/minijinja/releases/download/${MINIJINJA_VERSION}/minijinja-cli-x86_64-unknown-linux-musl.tar.xz" \
+    && curl -LO "https://github.com/mitsuhiko/minijinja/releases/download/${MINIJINJA_VERSION}/minijinja-cli-x86_64-unknown-linux-musl.tar.xz.sha256" \
+    && sha256sum -c "minijinja-cli-x86_64-unknown-linux-musl.tar.xz.sha256" \
+    && tar xf "minijinja-cli-x86_64-unknown-linux-musl.tar.xz" \
+    && mv minijinja-cli-x86_64-unknown-linux-musl/minijinja-cli /usr/local/bin/ \
+    && rm -rf minijinja-cli-x86_64-unknown-linux-musl*
+
+# Install latest SOPS from GitHub releases
+RUN SOPS_VERSION=$(curl -s https://api.github.com/repos/getsops/sops/releases/latest | jq -r .tag_name) \
+    && curl -LO "https://github.com/getsops/sops/releases/download/${SOPS_VERSION}/sops-${SOPS_VERSION}.linux.amd64" \
+    && curl -LO "https://github.com/getsops/sops/releases/download/${SOPS_VERSION}/sops-${SOPS_VERSION}.checksums.txt" \
+    && sha256sum --ignore-missing -c "sops-${SOPS_VERSION}.checksums.txt" \
+    && mv "sops-${SOPS_VERSION}.linux.amd64" /usr/local/bin/sops \
+    && chmod +x /usr/local/bin/sops \
+    && rm -f "sops-${SOPS_VERSION}.checksums.txt"
+
+# Install latest age from GitHub releases
+RUN AGE_VERSION=$(curl -s https://api.github.com/repos/FiloSottile/age/releases/latest | jq -r .tag_name) \
+    && curl -LO "https://github.com/FiloSottile/age/releases/download/${AGE_VERSION}/age-${AGE_VERSION}-linux-amd64.tar.gz" \
+    && tar xzf "age-${AGE_VERSION}-linux-amd64.tar.gz" \
+    && mv age/age /usr/local/bin/ \
+    && mv age/age-keygen /usr/local/bin/ \
+    && rm -rf age "age-${AGE_VERSION}-linux-amd64.tar.gz"
+
+# Install latest gitleaks from GitHub releases
+RUN GITLEAKS_VERSION=$(curl -s https://api.github.com/repos/gitleaks/gitleaks/releases/latest | jq -r .tag_name) \
+    && curl -LO "https://github.com/gitleaks/gitleaks/releases/download/${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION#v}_linux_x64.tar.gz" \
+    && curl -LO "https://github.com/gitleaks/gitleaks/releases/download/${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION#v}_checksums.txt" \
+    && sha256sum --ignore-missing -c "gitleaks_${GITLEAKS_VERSION#v}_checksums.txt" \
+    && tar xzf "gitleaks_${GITLEAKS_VERSION#v}_linux_x64.tar.gz" \
+    && mv gitleaks /usr/local/bin/ \
+    && rm -rf "gitleaks_${GITLEAKS_VERSION#v}"*
+
+COPY --from=nu-plugin-builder /usr/local/cargo/bin/nu_plugin_formats /usr/local/bin/nu_plugin_formats
+COPY --from=nu-plugin-builder /usr/local/cargo/bin/nu-lint /usr/local/bin/nu-lint
+
+ARG GEMINI_VERSION=unknown
+ARG TZ=Europe/Berlin
+
+RUN npm install -g @google/gemini-cli \
+    && npm cache clean --force
+
+USER gemini
+RUN pipx install ansible \
+    && pipx ensurepath
+USER root
+
+ENV GEMINI_VERSION=${GEMINI_VERSION}
+
+COPY bin/start.nu /usr/local/bin/start.nu
+RUN chmod +x /usr/local/bin/start.nu
+
+RUN ln -snf /usr/share/zoneinfo/${TZ} /etc/localtime \
+    && echo "${TZ}" > /etc/timezone
+
+RUN mkdir -p /workspace \
+    && mkdir -p /home/gemini/.gemini \
+    && chmod 700 /home/gemini/.gemini \
+    && chown -R gemini:gemini /workspace /home/gemini/.gemini
+
+USER gemini
+
+ENV SHELL=/bin/bash
+ENV TERM=xterm-256color
+ENV COLORTERM=truecolor
+ENV TZ=${TZ}
+ENV HOME=/home/gemini
+ENV GEMINI_CLI_THEME="GitHub Light"
+
+WORKDIR /workspace
+
+CMD ["/usr/local/bin/start.nu"]

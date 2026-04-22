@@ -1,0 +1,13 @@
+description = "Search MCP servers and online docs for a topic"
+prompt = """
+Answer the user's query by consulting the most authoritative sources available, prioritizing local MCP servers before searching the web.
+
+User Query: {{args}}
+
+Follow this priority:
+1. Nushell topics: Use the `mcp-nushell` server tools (`list_commands`, `command_help`).
+2. Library/package documentation: Use the `docs-mcp-server` to search indexed documentation.
+3. Official online documentation: If the above yield insufficient results, search the web for official documentation.
+
+Provide a concise answer. Always cite sources.
+"""
