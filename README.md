@@ -1,5 +1,9 @@
 # Agentonaut
 
+<p align="center">
+  <img src="assets/agentonaut-logo.png" alt="Agentonaut" width="200">
+</p>
+
 A containerized, isolated environment for AI CLI agents (Claude Code, Gemini CLI) using Podman and Nushell, with built-in optional MCP server orchestration.
 
 ## Overview
