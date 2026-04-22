@@ -31,13 +31,25 @@ Tested on Linux. The install script runs a pre-flight check before proceeding.
 
 1. **Clone and Install:**
    ```Shell
-   git clone https://github.com/s3n-ops/agentonaut-cli.git ~/tools/agentonaut
+   git clone https://github.com/s3n-ops/agentonaut.git ~/tools/agentonaut
    cd ~/tools/agentonaut
    ./install.nu
    ```
    The install script is idempotent. It generates the wrapper script, sets up the host environment, creates the container network, downloads upstream Containerfiles, and installs agent add-ons.
 
-   Clone the repository into its permanent location before running the install script. The generated wrapper references this path. Moving the directory afterwards breaks the wrapper; to relocate, move the directory, delete `~/.local/bin/agentonaut`, and run `nu install.nu` again.
+   Clone the repository into its permanent location before running the install script. The generated wrapper references this path. Moving the directory afterwards breaks the wrapper. To relocate, move the directory, delete `~/.local/bin/agentonaut`, and run `nu install.nu` again.
+
+   The wrapper is installed to `~/.local/bin`. Please make sure this directory is on your `PATH`:
+
+   ```bash
+   # Bash (~/.bashrc or ~/.bash_profile)
+   export PATH="$HOME/.local/bin:$PATH"
+   ```
+
+   ```nushell
+   # Nushell (~/.config/nushell/env.nu)
+   $env.PATH = ($env.PATH | prepend ($env.HOME | path join ".local" "bin"))
+   ```
 
    *Review `~/.config/agentonaut/config.toml` to customize persistent data paths if needed. The skeleton configuration is at [`conf/config.skel.toml`](conf/config.skel.toml).*
 
@@ -68,7 +80,7 @@ The sections below cover the most common commands. Run `agentonaut --help` for t
 
 #### Running agents
 
-Mount a project directory and start an agent session. To resume a previous session, use `/resume` inside the agent. The session history is tied to the path; a different path switches the agent's context.
+Mount a project directory and start an agent session. To resume a previous session, use `/resume` inside the agent. The session history is tied to the path. A different path switches the agent's context.
 
 ```shell
 agentonaut launch ~/projects/my-project
@@ -423,7 +435,7 @@ container = "mcp-nushell"
 url = "http://mcp-nushell:8001/mcp"
 ```
 
-The TOML key becomes the profile ID (`claude`, `gemini`, `devops`). Agent profiles define the container image; kube profiles define which MCPs run alongside. The combination is chosen at launch time via `--agent` and `--profile`.
+The TOML key becomes the profile ID (`claude`, `gemini`, `devops`). Agent profiles define the container image. Kube profiles define which MCPs run alongside. The combination is chosen at launch time via `--agent` and `--profile`.
 
 ### Declarative Pod Orchestration
 
