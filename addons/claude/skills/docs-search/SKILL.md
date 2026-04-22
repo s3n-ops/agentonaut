@@ -1,6 +1,6 @@
 ---
 name: docs-search
-description: Search docs-mcp-server for authoritative documentation. Use when general knowledge is insufficient: precise syntax questions, code examples that must be correct, edge cases, version-specific behavior, or discovering unknown functionality. Do not use for questions you can answer confidently from training data.
+description: "Search docs-mcp-server for authoritative documentation. Use when general knowledge is insufficient: precise syntax questions, code examples that must be correct, edge cases, version-specific behavior, or discovering unknown functionality. Do not use for questions you can answer confidently from training data."
 allowed-tools: mcp__docs-mcp-server__list_libraries, mcp__docs-mcp-server__search_docs
 ---
 
