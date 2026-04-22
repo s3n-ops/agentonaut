@@ -1,4 +1,4 @@
-# Environment (contains hostnames or local secrets)
+# direnv
 .envrc
 
 # macOS
