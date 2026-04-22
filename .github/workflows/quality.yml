@@ -1,0 +1,30 @@
+name: Quality
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  check-and-test:
+    name: Syntax Check & Tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Nushell
+        run: |
+          curl -LO https://github.com/nushell/nushell/releases/download/0.111.0/nu-0.111.0-x86_64-unknown-linux-gnu.tar.gz
+          tar -xzf nu-0.111.0-x86_64-unknown-linux-gnu.tar.gz
+          sudo mv nu-0.111.0-x86_64-unknown-linux-gnu/nu /usr/local/bin/nu
+
+      - name: Install nutest
+        run: git clone --quiet --depth 1 https://github.com/vyadh/nutest.git lib/nutest
+
+      - name: Syntax check
+        run: nu bin/nu-check-project.nu
+
+      - name: Run tests
+        run: nu bin/run-tests.nu --fail
