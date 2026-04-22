@@ -21,7 +21,9 @@ jobs:
           sudo mv nu-0.111.0-x86_64-unknown-linux-gnu/nu /usr/local/bin/nu
 
       - name: Install nutest
-        run: git clone --quiet --depth 1 https://github.com/vyadh/nutest.git lib/nutest
+        run: |
+          git clone --quiet --depth 1 https://github.com/vyadh/nutest.git /tmp/nutest-repo
+          cp -r /tmp/nutest-repo/nutest lib/nutest
 
       - name: Syntax check
         run: nu bin/nu-check-project.nu
