@@ -132,10 +132,11 @@ agentonaut git download by origin upstream
 Download official documentation repositories and index them into `docs-mcp-server` for use as offline context in agent sessions.
 
 ```shell
+agentonaut docs download            # list available profiles
 agentonaut docs download nushell
-agentonaut docs download all
+agentonaut docs download all        # 5 GiB+
 agentonaut docs status
-agentonaut docs index all        # pod must be running
+agentonaut docs index all           # pod must be running
 agentonaut docs index status
 ```
 
@@ -436,7 +437,7 @@ MCP server support is experimental. Individual MCP servers may crash inside the 
 
 Fetches developer documentation repositories and indexes them into `docs-mcp-server` for use as offline context. The workflow is:
 
-1. **Download** repositories with `agentonaut docs download all`
+1. **Download** a documentation profile with `agentonaut docs download <profile>`. Run `agentonaut docs download` without arguments to list available profiles. `agentonaut docs download all` downloads every profile (5 GiB+).
 2. **Launch** a session with the `devops` kube profile: `agentonaut launch ~/project --profile devops`
 3. **Index** the downloaded docs into the running server: `agentonaut docs index all`
 4. **Browse** the web dashboard to verify: `http://127.0.0.1:6280`
@@ -530,7 +531,7 @@ Configuration is loaded and managed exclusively by the main script. Modules unde
 
 #### Seccomp
 
-To support CLI agents, Node.js environments, and JIT compilers, the containers are run with `--security-opt seccomp=unconfined`. This trade-off is mitigated by the strict use of rootless Podman and user namespace mapping (`keep-id`). The container process possesses no elevated privileges on the host system.
+To support CLI agents, Node.js environments, and JIT compilers, the containers are run with `--security-opt seccomp=unconfined`. This trade-off is mitigated by rootless Podman and user namespace mapping (`keep-id`). The container process possesses no elevated privileges on the host system.
 
 #### SELinux
 
@@ -548,7 +549,7 @@ Agentonaut uses custom [`Containerfile`](https://github.com/opencontainers/image
 
 #### Independent Build for Claude
 
-The Claude Code custom container is built directly on `debian:trixie-slim`. Claude Code is installed via the official install script, which uses Bun as its runtime. The official [`claude-code-devcontainer`](https://github.com/anthropics/claude-code/blob/main/.devcontainer/Dockerfile) is still Node-based and is no longer used as the base image.
+The Claude Code custom container is built directly on `debian:trixie-slim`. Claude Code is installed via the official install script, which uses Bun as its runtime. See the official https://github.com/anthropics/claude-code/blob/main/.devcontainer/Dockerfile for reference.
 
 #### Independent Build for Gemini
 
