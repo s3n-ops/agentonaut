@@ -336,6 +336,13 @@ let db = "~/.local/share/app/data.db" # Unclear: Relative or absolute?
 
 ## Tool Usage
 
+### Nushell MCP vs. Bash tool
+
+Use the **Nushell MCP** (`mcp__mcp-nushell__evaluate`) when the task needs only Nushell built-ins and no workspace writes.
+Use the **Bash tool** (with `nu -c` if needed) when external tools (`rg`, `git`, `gh`, `sqlite3`, etc.) or workspace file writes are required.
+
+The Nushell MCP container has a minimal package set (`ca-certificates`, `libssl3`, `jq`, `curl`, `tar`, `gzip`, Nushell). Tools like `rg`, `git`, `gh`, `sqlite3`, `mu`, and `rsync` are not available there. `/workspace` is read-only inside the container; `/tmp` is writable for intermediate results.
+
 ### Web Fetching
 
 Use `web_fetch` (native tool) instead of `fetch_url` (provided by `docs-mcp-server`).

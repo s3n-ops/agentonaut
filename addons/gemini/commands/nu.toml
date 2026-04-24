@@ -4,11 +4,14 @@ Execute the user's request using the `mcp-nushell` server tools.
 
 User Request: {{args}}
 
-**Important Context:**
-The `mcp-nushell` server runs inside a container that has **read-only** access to the `/workspace` directory structure.
-- It sees the same files as the host at `/workspace`.
-- It CANNOT modify files.
-- It is perfect for querying Nushell state, running read-only scripts, or checking syntax/behavior.
+**When to use the Nushell MCP:**
+- The task needs only Nushell built-ins and no workspace writes.
+- Use shell commands (with `nu -c` if needed) instead when external tools (`rg`, `git`, `gh`, `sqlite3`, etc.) or workspace file writes are required.
+
+**Container constraints:**
+- `/workspace` is read-only. File modifications must go through the main agent's file tools.
+- `/tmp` is writable and can be used for intermediate results within a session.
+- Minimal package set: `ca-certificates`, `libssl3`, `jq`, `curl`, `tar`, `gzip`, and Nushell itself. Tools like `rg`, `git`, `gh`, `sqlite3`, `mu`, and `rsync` are not available.
 
 Use `evaluate` to run Nushell code.
 """
