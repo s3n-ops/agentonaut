@@ -11,7 +11,7 @@ use git
 use version
 use mcp
 
-const AGENTONAUT_VERSION = "0.39.7"
+const AGENTONAUT_VERSION = "0.39.8"
 
 # Initialize configuration (singleton - loads once)
 cfg init "agentonaut"
@@ -133,7 +133,8 @@ def "main git download" [
 
     let repo_branch = ($profile.repo_branch? | default "main")
 
-    git download dir $profile.repo $repo_dir $repo_branch $profile.local_dir
+    let local_path = ($env.agentonaut.cfg.root_path | path join $profile.local_dir)
+    git download dir $profile.repo $repo_dir $repo_branch $local_path
 }
 
 # Download container profiles filtered by field
@@ -183,7 +184,8 @@ def "main git download by" [
 
         let repo_branch = $p.repo_branch? | default "main"
 
-        git download dir $p.repo $repo_dir $repo_branch $p.local_dir
+        let local_path = ($env.agentonaut.cfg.root_path | path join $p.local_dir)
+        git download dir $p.repo $repo_dir $repo_branch $local_path
     }
 
     log info "All profiles downloaded successfully"
@@ -192,7 +194,12 @@ def "main git download by" [
 # Download all upstream container profiles
 @example "agentonaut git download all" { agentonaut git download all }
 def "main git download all" []: nothing -> nothing {
-    let container_profiles = ($env.agentonaut.cfg.profile | profile list-by-type "container")
+    let root_path = $env.agentonaut.cfg.root_path
+    let container_profiles = (
+        $env.agentonaut.cfg.profile
+        | profile list-by-type "container"
+        | each { |p| $p | upsert local_dir ($root_path | path join $p.local_dir) }
+    )
     git download all ...$container_profiles
 }
 
