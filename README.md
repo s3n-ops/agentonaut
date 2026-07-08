@@ -358,7 +358,7 @@ Commands are available as slash commands inside an agent session.
 | `/git-commit` | yes | no | Generate a git commit message, without running git commit |
 | `/lang <language>` | yes | yes | Set the session language (e.g. `/lang en`, `/lang es`, `/lang fr`, `/lang de`) |
 | `/nu <expression>` | yes | yes | Execute a Nushell expression via mcp-nushell |
-| `/sandbox` | yes | yes | Inform the agent about its container environment and how to troubleshoot issues |
+| `/container` | yes | yes | Inform the agent about its container environment and how to troubleshoot issues |
 
 ### Skills (Claude)
 
