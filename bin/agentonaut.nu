@@ -11,7 +11,7 @@ use git
 use version
 use mcp
 
-const AGENTONAUT_VERSION = "0.39.8"
+const AGENTONAUT_VERSION = "0.39.10"
 
 # Initialize configuration (singleton - loads once)
 cfg init "agentonaut"
@@ -1002,8 +1002,19 @@ def "main launch" [
     --name(-n): string = ""             # Container name override (default: derived from profile)
     --agent(-a): string = ""            # Agent to use (default: agentonaut.default_agent in config)
     --profile(-r): string = ""          # Kube profile name (default: kube.default_profile in config)
-    --add-workspace(-w): list<string> = []  # Additional paths to mount read-only
+    --add-workspace(-w): any = []       # Additional paths to mount (use a list [p1, p2] for multiple paths)
 ]: nothing -> nothing {
+
+    let add_workspace = if ($add_workspace | describe | str starts-with "string") {
+        if ($add_workspace | is-empty) { [] } else {
+            try {
+                let parsed = ($add_workspace | from nuon)
+                if ($parsed | describe | str starts-with "list") { $parsed } else { [$add_workspace] }
+            } catch { [$add_workspace] }
+        }
+    } else {
+        $add_workspace
+    }
 
     let agent = if ($agent | is-empty) {
         $env.agentonaut.cfg.agentonaut.default_agent
@@ -1060,7 +1071,6 @@ def "main launch" [
 
     let workspace_path = ($workspace_path | path expand)
     let workspace_container_path = $"/workspace/($workspace_path | util sanitize path)"
-
 
     let workspace_data = {
         "workspace_path": $workspace_path

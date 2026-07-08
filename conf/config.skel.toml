@@ -102,7 +102,7 @@ web_url = "http://127.0.0.1:6280"
 # mcp_url:      URL passed to docs-mcp-server scrape (file:/// or https://)
 
 [docs]
-base_dir = "~/Documents/agentonaut/offline-documentation"
+base_dir = "~/Documents/offline-documentation"
 
 [profile.docs.nushell]
 repo = "https://github.com/nushell/nushell.github.io.git"
@@ -343,6 +343,15 @@ depth = 1
 description = "MiniJinja Rust templating engine"
 library_name = "minijinja-documentation"
 mcp_url = "file:///docs/minijinja/minijinja"
+
+[profile.docs.mistral-vibe]
+repo = "https://github.com/mistralai/mistral-vibe.git"
+target_dir = "mistral-vibe"
+branch = "main"
+depth = 1
+description = "Mistral Vibe terminal-native AI coding agent"
+library_name = "mistral-vibe-documentation"
+mcp_url = "file:///docs/mistral-vibe/docs"
 
 [profile.docs.yaml]
 repo = "https://github.com/yaml/yaml-spec.git"

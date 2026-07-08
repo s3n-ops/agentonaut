@@ -1,6 +1,6 @@
 #!/usr/bin/env nu
 
-def --wrapped main [...args: string] {
+def --wrapped main [...rest] {
     # Export the wrapper's path so the main script can use it as a reference,
     # for example when spawning new isolated instances via sudo.
     $env.WRAPPER_PATH = $env.PROCESS_PATH
@@ -13,5 +13,5 @@ def --wrapped main [...args: string] {
     const script_path = "{{ project_root }}/bin/agentonaut.nu"
 
     let lib_dirs = ([$mod_path, $lib_path] | str join (char record_sep))
-    exec nu --include-path $lib_dirs $script_path ...$args
+    exec nu --include-path $lib_dirs $script_path ...$rest
 }
