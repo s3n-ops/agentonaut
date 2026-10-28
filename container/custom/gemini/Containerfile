@@ -1,4 +1,4 @@
-FROM docker.io/library/node:20-trixie-slim
+FROM docker.io/library/node:25-trixie-slim
 
 # Build stage for nu_plugin_formats
 FROM rust:slim AS nu-plugin-builder
@@ -18,7 +18,7 @@ RUN rustup update stable \
     && cargo install nu_plugin_formats --locked \
     && cargo install nu-lint --locked
 
-FROM docker.io/library/node:20-trixie-slim
+FROM docker.io/library/node:25-trixie-slim
 
 USER root
 
