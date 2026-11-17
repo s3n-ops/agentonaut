@@ -173,7 +173,7 @@ def "extract returns null for missing fields" []: record -> nothing {
 def "fetch multiple returns record keyed by profile id" []: record -> nothing {
     let all = ($in.profiles | profile convert-to-list)
     let result = (profile fetch multiple ["antigravity" "claude"] $all)
-    assert equal ($result | columns | sort) ["claude" "antigravity"]
+    assert equal ($result | columns | sort) ["antigravity" "claude"]
     assert equal $result.antigravity.type "container"
 }
 

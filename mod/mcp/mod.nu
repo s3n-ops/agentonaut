@@ -1,6 +1,6 @@
-use std log
+use std/log
 
-const MCP_MODULE_VERSION = "0.6.11"
+const MCP_MODULE_VERSION = "0.6.12"
 
 #
 # Register MCPs in running container from config

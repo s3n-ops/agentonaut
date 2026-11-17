@@ -1,5 +1,5 @@
-use std log
-const GIT_MODULE_VERSION = "0.2.5"
+use std/log
+const GIT_MODULE_VERSION = "0.2.6"
 
 # Download a GitHub directory using git sparse checkout
 export def "download dir" [
