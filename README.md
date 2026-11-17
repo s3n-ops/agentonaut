@@ -4,7 +4,7 @@
   <img src="assets/agentonaut-logo.png" alt="Agentonaut" width="200">
 </p>
 
-A containerized, isolated environment for AI CLI agents (Claude Code, Antigravity CLI) using Podman and Nushell, with built-in optional MCP server orchestration.
+A containerized, isolated environment for AI CLI agents (Claude Code, Antigravity CLI, OpenCode) using Podman and Nushell, with built-in optional MCP server orchestration.
 
 ## Overview
 
@@ -88,7 +88,7 @@ agentonaut launch ~/projects/my-project --agent antigravity
 agentonaut launch ~/projects/my-project --agent claude --profile full
 agentonaut launch ~/projects/my-project --add-workspace [~/projects/my-second-project,~/projects/your-project] --agent claude
 agentonaut launch ~/projects/my-project --dangerously-skip-permissions
-agentonaut launch ~/projects/my-project --model gemini-2.5-pro --prompt "Run tests and fix errors"
+agentonaut launch ~/projects/my-project --agent antigravity --model gemini-2.5-pro --prompt "Run tests and fix errors"
 ```
 
 #### Chat
@@ -103,10 +103,12 @@ agentonaut chat --prompt "Explain the difference between Podman and Docker"
 
 #### Abort
 
-Stops and removes the pod and all its containers started by the last `launch` or `chat` command.
+Stops and removes an agent's pod and all its containers. Without `--agent`, the pod of `default_agent` is removed. Other agent pods and the shared MCP pod keep running. `--shared` removes the shared MCP pod instead.
 
 ```shell
 agentonaut abort
+agentonaut abort --agent claude
+agentonaut abort --shared
 ```
 
 #### Diagnostics
@@ -158,10 +160,11 @@ agentonaut docs index status
 
 ### Uninstall
 
-Stop any running pod first:
+Stop any running pods first:
 
 ```Shell
-agentonaut abort
+agentonaut abort --agent claude
+agentonaut abort --shared
 ```
 
 Remove container images and the network:
@@ -217,7 +220,7 @@ An agent profile references one container profile. A kube profile references zer
 #### Flat View
 
 ```
-profile.agent.*       # Agent definitions (claude, antigravity)
+profile.agent.*       # Agent definitions (claude, antigravity, opencode)
 profile.kube.*        # Pod configurations (agent + MCP sidecars)
 profile.mcp.*         # MCP server definitions
 profile.container.*   # Container image build definitions
@@ -227,19 +230,19 @@ profile.docs.*        # Offline documentation repositories
 #### Tree View
 
 ```
-profile.agent.*  (claude, antigravity)
-└── 1:1  profile.container.*  (claude, antigravity)
+profile.agent.*  (claude, antigravity, opencode)
+└── 1:1  profile.container.*  (claude, antigravity, opencode)
 
 profile.kube.*  (minimal, full, nushell, docs)
 └── 0:N  profile.mcp.*  (nushell, docs-mcp-server)
-         └── 1:1  profile.container.*  (mcp-nushell, ...)
+         └── 1:1  profile.container.*  (mcp-nushell, docs-mcp-server)
 
 profile.docs.*  (standalone: nushell, ansible, podman, ...)
 ```
 
 ### Adding an MCP Profile
 
-An MCP profile defines a new MCP server sidecar. Three entries are required: a container profile, an MCP profile, and a kube profile that references it.
+An MCP profile defines a new MCP server. It requires a container profile, an MCP profile, a kube profile that references it, and two pod templates.
 
 Add a container profile under `[profile.container.*]`:
 
@@ -262,11 +265,22 @@ Add an MCP profile under `[profile.mcp.*]`:
 ```toml
 [profile.mcp.my-mcp]
 container = "my-mcp"
-yaml_file = "conf/kube/my-mcp.yaml"
 name = "my-mcp"
 transport = "http"
+shared = false
 url = "http://my-mcp:8080/mcp"
 ```
+
+`shared = false` runs the server as a sidecar in the agent's pod. `shared = true` runs it in the shared pod (`agentonaut-shared`), and the URL must use that pod name as host.
+
+Add the container and volume definitions as Jinja2 templates named after the MCP profile ID:
+
+```
+conf/kube/templates/containers/my-mcp.yaml.j2
+conf/kube/templates/volumes/my-mcp.yaml.j2
+```
+
+Use `conf/kube/templates/containers/nushell.yaml.j2` and `conf/kube/templates/volumes/nushell.yaml.j2` as a starting point.
 
 Reference it in a kube profile:
 
@@ -346,6 +360,7 @@ Add-ons extend agents with slash commands, skills, and sub-agents. They are stor
 ```Shell
 agentonaut agent setup claude
 agentonaut agent setup antigravity
+agentonaut agent setup opencode
 ```
 
 Use `--overwrite` to update existing files after changes:
@@ -380,7 +395,7 @@ skills and the Nushell subagent from `addons/opencode/`.
 ### Skills
 
 Skills are invoked automatically based on context, or explicitly by name. The
-skills below are Claude-only, since they depend on MCP sidecars.
+skills below are available in Claude and OpenCode. They depend on the MCP servers.
 
 #### docs-search
 Searches docs-mcp-server for offline documentation. Activates when the question requires precise syntax, correct code examples, or discovery of unknown functionality. Requires a running `docs-mcp-server` with indexed libraries.
@@ -391,7 +406,7 @@ Queries the running `mcp-nushell` server for command help and command listings.
 #### nushell-operator
 Executes Nushell expressions in the live `mcp-nushell` environment for testing and evaluation.
 
-### Sub-Agents (Claude)
+### Sub-Agents (Claude, OpenCode)
 
 #### nushell
 Nushell sub-agent with access to the Nushell skills above. Invoke it for writing or debugging Nushell scripts.
@@ -417,18 +432,18 @@ Host paths are sanitized and mapped to unique container paths.
 /workspace/home-user-projects-my-app
 ```
 
-Claude Code and Antigravity CLI store per-directory state under `~/.local/share/...`. Without a unique mapping, both tools would treat every session as the same project. For this reason, distinct host directories must map to unique paths inside the container.
+Claude Code, Antigravity CLI and OpenCode store per-directory state under `~/.local/share/...`. Without a unique mapping, both tools would treat every session as the same project. For this reason, distinct host directories must map to unique paths inside the container.
 
 ### Agent Data Persistence
 
-Agent data is persisted via `hostPath` volumes defined in the Kube YAML. Each agent has two mounts: one for its data directory and one for its config file.
+Agent data is persisted via `hostPath` volumes defined in the Kube YAML. Each agent mounts its data directory. Claude also mounts a separate config file.
 
 | Host path | Container path | Contents |
 |-----------|---------------|----------|
 | `~/.local/share/agentonaut/claude` | `/home/claude/.claude` | Sessions, history, skills, commands |
 | `~/.config/agentonaut/claude/claude.json` | `/home/claude/.claude.json` | Authentication, settings |
-| `~/.local/share/agentonaut/gemini` | `/home/gemini/.gemini` | Sessions, history, plugins |
-| `~/.config/agentonaut/gemini/gemini.json` | `/home/gemini/.gemini.json` | Authentication, settings |
+| `~/.local/share/agentonaut/antigravity` | `/home/antigravity/.gemini` | Sessions, history, skills, authentication, settings |
+| `~/.local/share/agentonaut/opencode` | `/home/opencode/.opencode` | Config, data (incl. provider credentials), state |
 
 The host paths are created on first launch (`DirectoryOrCreate`, `FileOrCreate`). Agent data like authentication and history persists across sessions, because it is stored on the host, not in the container.
 
@@ -445,7 +460,7 @@ container = "antigravity"
 [profile.agent.claude]
 container = "claude"
 
-[profile.kube.devops]
+[profile.kube.full]
 mcp_profiles = ["nushell", "docs-mcp-server"]
 
 [profile.mcp.nushell]
@@ -453,11 +468,13 @@ container = "mcp-nushell"
 url = "http://mcp-nushell:8001/mcp"
 ```
 
-The TOML key becomes the profile ID (`claude`, `antigravity`, `devops`). Agent profiles define the container image. Kube profiles define which MCPs run alongside. The combination is chosen at launch time via `--agent` and `--profile`.
+The TOML key becomes the profile ID (`claude`, `antigravity`, `full`). Agent profiles define the container image. Kube profiles define which MCPs run alongside. The combination is chosen at launch time via `--agent` and `--profile`.
 
 ### Declarative Pod Orchestration
 
 Multi-container setups (Agent + multiple MCP sidecars) are generated dynamically via Jinja2 templates and executed via `podman kube play`.
+
+Each agent runs in its own pod (`<pod_prefix>-<agent>`, e.g. `agentonaut-claude`). Several agents can run side by side, each with its own lifecycle and workspace. MCP servers with `shared = true` (e.g. `docs-mcp-server`) run in a long-lived shared pod (`agentonaut-shared`) that all agents reach by pod name via Podman DNS. MCP servers with `shared = false` (e.g. `mcp-nushell`) run as sidecars inside the agent's pod.
 
 ### MCP Support (Experimental)
 
@@ -468,7 +485,7 @@ MCP server support is experimental. Individual MCP servers may crash inside the 
 Fetches developer documentation repositories and indexes them into `docs-mcp-server` for use as offline context. The workflow is:
 
 1. **Download** a documentation profile with `agentonaut docs download <profile>`. Run `agentonaut docs download` without arguments to list available profiles. `agentonaut docs download all` downloads every profile (5 GiB+).
-2. **Launch** a session with the `devops` kube profile: `agentonaut launch ~/project --profile devops`
+2. **Launch** a session with the `full` kube profile: `agentonaut launch ~/project --profile full`. This starts `docs-mcp-server` in the shared pod.
 3. **Index** the downloaded docs into the running server: `agentonaut docs index all`
 4. **Browse** the web dashboard to verify: `http://127.0.0.1:6280`
 
@@ -518,11 +535,11 @@ Agentonaut uses Podman's [built-in rootless mode](https://docs.podman.io/en/late
 
 Podman supports Kubernetes YAML natively via [`podman kube play`](https://docs.podman.io/en/latest/markdown/podman-kube-play.1.html). Pod definitions are structurally compatible with Kubernetes: the same YAML format works locally and in a cluster, though host-specific settings (such as `hostPath` volumes) require adaptation for cluster deployments.
 
-[Pods](https://docs.podman.io/en/stable/markdown/podman-pod.1.html) group multiple containers under a shared network namespace. Agentonaut uses this to run an agent container alongside MCP sidecar containers, which communicate within the pod's shared network namespace.
+[Pods](https://docs.podman.io/en/stable/markdown/podman-pod.1.html) group multiple containers under a shared network namespace. Agentonaut uses this to run an agent container alongside MCP sidecar containers. Agent-neutral MCP servers run in a separate shared pod on the same Podman network.
 
 ### Why not Use Built-in Sandboxing?
 
-Both Claude Code and Antigravity CLI include built-in sandboxing.
+Claude Code and Antigravity CLI include built-in sandboxing.
 Claude Code uses [bubblewrap](https://code.claude.com/docs/en/sandboxing#os-level-enforcement) on Linux.
 Antigravity CLI offers a `--sandbox` flag that restricts terminal access within the session.
 
@@ -532,13 +549,13 @@ Agentonaut also uses Podman, but puts the container definition under user contro
 The container image is defined locally. You choose which tools, versions, and system configurations are available to the agent.
 
 #### Consistency
-Both agents run in a customizable container environment, with your toolset, regardless of which agent is active.
+All agents run in a customizable container environment, with your toolset, regardless of which agent is active.
 
 #### MCP sidecars
-MCP servers run as isolated containers in the same pod as the agent container, communicating within the pod's shared network namespace.
+MCP servers run as isolated containers, either as sidecars in the agent's pod or in a shared pod on the same Podman network.
 
 #### Unified launcher
-One command launches any agent with a matching profile. Switching between Claude Code and Antigravity is a single flag, useful when quota is exhausted or a second opinion is needed.
+One command launches any agent with a matching profile. Switching between Claude Code, Antigravity and OpenCode is a single flag, useful when quota is exhausted or a second opinion is needed.
 
 ### Configuration Loading
 
@@ -575,7 +592,7 @@ On systems without SELinux (e.g. most Debian and Ubuntu installations), Podman i
 
 ### Custom Container Strategy
 
-Agentonaut uses custom [`Containerfile`](https://github.com/opencontainers/image-spec) definitions for Antigravity and Claude Code instead of using official images directly. Containerfiles are the OCI-standard equivalent of Dockerfiles.
+Agentonaut uses custom [`Containerfile`](https://github.com/opencontainers/image-spec) definitions for Claude Code, Antigravity and OpenCode instead of using official images directly. Containerfiles are the OCI-standard equivalent of Dockerfiles.
 
 #### Independent Build for Claude
 
@@ -583,7 +600,11 @@ The Claude Code custom container is built directly on `debian:trixie-slim`. Clau
 
 #### Independent Build for Antigravity
 
-Antigravity CLI (`agy`) is a closed-source Go binary with no official container image. The custom Agentonaut image is built on `node:20-trixie-slim` and installs `agy` via the [official installer](https://antigravity.google/download#antigravity-cli), which verifies the download against a SHA512 manifest. The toolset matches the Claude container.
+Antigravity CLI (`agy`) is a closed-source Go binary with no official container image. The custom Agentonaut image is built on `debian:trixie-slim` and installs `agy` via the [official installer](https://antigravity.google/download#antigravity-cli), which verifies the download against a SHA512 manifest. The toolset matches the Claude container.
+
+#### Independent Build for OpenCode
+
+The OpenCode container is built on `debian:trixie-slim` and installs the static OpenCode binary from the GitHub release. The version check is restricted to the v2 CLI release tags.
 
 #### Unified Tooling
 
@@ -591,7 +612,7 @@ Customizing both environments allows Agentonaut to provide a suite of tools (Nus
 
 #### Always-Current Builds
 
-Container profiles that track an upstream repository (e.g., Antigravity CLI, Nushell MCP) carry a `version_check` field. Before building, Agentonaut fetches the latest upstream release tag via `git ls-remote` and passes it to the build as a build argument. The build fails if no version can be determined. Every build pulls a newer base image if the registry has one and runs without cache.
+Container profiles that track an upstream repository (Claude Code, Antigravity CLI, OpenCode, Nushell MCP) carry a `version_check` field. Before building, Agentonaut fetches the latest upstream release tag via `git ls-remote` and passes it to the build as a build argument. The build fails if no version can be determined. Every build pulls a newer base image if the registry has one and runs without cache.
 
 ## Testing
 
@@ -614,6 +635,7 @@ The testable modules are:
 | `mod/profile` | `convert-to-list`, `get-nested`, `list-names`, `list-types`, `list-by-type`, `fetch`, `filter-by-type`, `query`, `query with-repo`, `extract`, `fetch multiple` |
 | `mod/cfg` | `unfold`, `extract`, `extract by`, `extract query`, `extract nested` |
 | `mod/podman/kube` | `update container`, `update volumes`, `update volumes by name`, `update workspace` |
+| `mod/version` | `select-latest-tag` |
 
 ### Run all tests
 
@@ -707,7 +729,7 @@ agentonaut image build mcp-nushell
 
 ## AI Disclosure
 
-Development was assisted by AI tools (Gemini, Claude, Junie).
+Development was assisted by AI tools (Claude, Antigravity, OpenCode, Junie).
 
 ## Contributing
 
