@@ -22,4 +22,4 @@ Do not use for general questions you can answer confidently.
 3. Call `mcp__docs-mcp-server__search_docs` with the selected library and a focused search term.
 4. If the server is unavailable or no matching library exists, inform the user.
 
-Never use `mcp__docs-mcp-server__fetch_url` — it consumes too many tokens.
+Never use `mcp__docs-mcp-server__fetch_url`, because it consumes too many tokens.
