@@ -2,29 +2,24 @@
 apiVersion: v1
 kind: Pod
 metadata:
-  name: claude-pod
+  name: antigravity-pod
   labels:
-    app: gemini
+    app: antigravity
   annotations:
     io.podman.annotations.userns: keep-id
-    container.apparmor.security.beta.kubernetes.io/gemini: unconfined
-    container.seccomp.security.alpha.kubernetes.io/gemini: unconfined
+    container.apparmor.security.beta.kubernetes.io/antigravity: unconfined
+    container.seccomp.security.alpha.kubernetes.io/antigravity: unconfined
 spec:
   containers:
-    - name: gemini
-      image: localhost/gemini:latest
+    - name: antigravity
+      image: localhost/antigravity:latest
       stdin: true
       tty: true
       volumeMounts:
         - name: workspace
           mountPath: /workspace:z
         - name: agent-data
-          mountPath: /home/gemini/.gemini:z
-        - name: agent-config
-          mountPath: /home/gemini/.gemini.json:z
-      env:
-        - name: GEMINI_WORKSPACE
-          value: /workspace
+          mountPath: /home/antigravity/.gemini:z
       securityContext:
         allowPrivilegeEscalation: false
         runAsUser: 1000
@@ -43,12 +38,8 @@ spec:
         type: Directory
     - name: agent-data
       hostPath:
-        path: ~/.local/share/agentonaut/gemini
+        path: ~/.local/share/agentonaut/antigravity
         type: DirectoryOrCreate
-    - name: agent-config
-      hostPath:
-        path: ~/.config/agentonaut/gemini/gemini.json
-        type: FileOrCreate
 
   restartPolicy: Never
   dnsPolicy: ClusterFirst

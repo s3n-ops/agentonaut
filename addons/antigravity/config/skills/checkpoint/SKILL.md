@@ -1,5 +1,8 @@
-description = "Save session progress to a markdown document"
-prompt = """
+---
+name: checkpoint
+description: Save session progress to a markdown document
+---
+
 Write a concise markdown document summarizing the current session.
 
 Include:
@@ -13,4 +16,3 @@ Steps:
 2. Save the document to `CHECKPOINT-<timestamp>.md` using `write_file`.
 
 Be precise and efficient. Enable seamless handoff to the next session.
-"""

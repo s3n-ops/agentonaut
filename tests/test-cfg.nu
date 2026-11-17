@@ -1,6 +1,6 @@
 const NU_LIB_DIRS = [(path self "../mod")]
 
-use std assert
+use std/assert
 use std/testing *
 
 use cfg
@@ -15,9 +15,9 @@ def setup [] {
             "agent.claude.id": "claude"
             "agent.claude.type": "container"
             "agent.claude.yaml_file": "claude.yaml"
-            "agent.gemini.id": "gemini"
-            "agent.gemini.type": "container"
-            "agent.gemini.yaml_file": "gemini.yaml"
+            "agent.antigravity.id": "antigravity"
+            "agent.antigravity.type": "container"
+            "agent.antigravity.yaml_file": "antigravity.yaml"
             "mcp.nushell.id": "nushell"
             "mcp.nushell.type": "mcp"
             "mcp.nushell.container": "mcp-nushell"
@@ -129,11 +129,11 @@ def "extract query with starts-with matches prefix" []: record -> nothing {
 
 @test
 def "extract query result records contain sibling fields" []: record -> nothing {
-    let result = ($in.config | cfg extract query "id" "gemini")
+    let result = ($in.config | cfg extract query "id" "antigravity")
     let entry = ($result | first)
-    assert equal $entry.id "gemini"
+    assert equal $entry.id "antigravity"
     assert equal $entry.type "container"
-    assert equal $entry.yaml_file "gemini.yaml"
+    assert equal $entry.yaml_file "antigravity.yaml"
 }
 
 #

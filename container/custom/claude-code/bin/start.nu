@@ -45,8 +45,25 @@ def main [] {
         }
     )
 
+    # Build CLI arguments
+    mut agent_args = []
+
+    if ("AGENT_SKIP_PERMISSIONS" in $env) and ($env.AGENT_SKIP_PERMISSIONS == "true") {
+        $agent_args = ($agent_args | append "--dangerously-skip-permissions")
+    }
+
+    if ("AGENT_MODEL" in $env) and ($env.AGENT_MODEL | is-not-empty) {
+        $agent_args = ($agent_args | append ["--model", $env.AGENT_MODEL])
+    }
+
+    if ("AGENT_PROMPT" in $env) and ($env.AGENT_PROMPT | is-not-empty) {
+        $agent_args = ($agent_args | append ["-p", $env.AGENT_PROMPT])
+    }
+
+    let final_args = ($agent_args | append $additional_args)
+
     cd $workspace
 
-    log write $"Executing: claude ($additional_args | str join ' ')"
-    exec claude ...$additional_args
+    log write $"Executing: claude ($final_args | str join ' ')"
+    exec claude ...$final_args
 }

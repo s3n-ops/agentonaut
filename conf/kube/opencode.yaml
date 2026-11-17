@@ -1,0 +1,49 @@
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: opencode-pod
+  labels:
+    app: opencode
+  annotations:
+    io.podman.annotations.userns: keep-id
+    container.apparmor.security.beta.kubernetes.io/opencode: unconfined
+    container.seccomp.security.alpha.kubernetes.io/opencode: unconfined
+spec:
+  containers:
+    - name: opencode
+      image: localhost/opencode:latest
+      stdin: true
+      tty: true
+      volumeMounts:
+        - name: workspace
+          mountPath: /workspace:z
+        - name: agent-data
+          mountPath: /home/opencode/.opencode:z
+      env:
+        - name: WORKSPACE
+          value: /workspace
+      securityContext:
+        allowPrivilegeEscalation: false
+        runAsUser: 1000
+        runAsGroup: 1000
+        seccompProfile:
+          type: Unconfined
+        capabilities:
+          drop:
+            - NET_RAW
+      imagePullPolicy: Never
+
+  volumes:
+    - name: workspace
+      hostPath:
+        path: /workspace
+        type: Directory
+    - name: agent-data
+      hostPath:
+        path: ~/.local/share/agentonaut/opencode
+        type: DirectoryOrCreate
+
+  restartPolicy: Never
+  dnsPolicy: ClusterFirst
+  shareProcessNamespace: false

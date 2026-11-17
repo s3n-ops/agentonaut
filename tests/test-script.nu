@@ -1,6 +1,6 @@
 const NU_LIB_DIRS = [(path self "../mod")]
 
-use std assert
+use std/assert
 use std/testing *
 
 use script

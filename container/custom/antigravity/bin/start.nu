@@ -28,16 +28,13 @@ def main [] {
         }
     )
 
-    # Set GEMINI_WORKSPACE for the gemini process
-    $env.GEMINI_WORKSPACE = $workspace
-
     # Build additional workspace arguments
     let additional_args = (
         if ("WORKSPACE_ADDITIONAL" in $env) {
             (
                 $env.WORKSPACE_ADDITIONAL
                 | split row ":"
-                | each {|path| ["--include-directories", $path]}
+                | each {|path| ["--add-dir", $path]}
                 | flatten
             )
         } else {
@@ -45,8 +42,25 @@ def main [] {
         }
     )
 
+    # Build CLI arguments
+    mut agent_args = []
+
+    if ("AGENT_SKIP_PERMISSIONS" in $env) and ($env.AGENT_SKIP_PERMISSIONS == "true") {
+        $agent_args = ($agent_args | append "--dangerously-skip-permissions")
+    }
+
+    if ("AGENT_MODEL" in $env) and ($env.AGENT_MODEL | is-not-empty) {
+        $agent_args = ($agent_args | append ["--model", $env.AGENT_MODEL])
+    }
+
+    if ("AGENT_PROMPT" in $env) and ($env.AGENT_PROMPT | is-not-empty) {
+        $agent_args = ($agent_args | append ["-p", $env.AGENT_PROMPT])
+    }
+
+    let final_args = ($agent_args | append $additional_args)
+
     cd $workspace
 
-    log write $"Executing: gemini ($additional_args | str join ' ')"
-    exec gemini ...$additional_args
+    log write $"Executing: agy ($final_args | str join ' ')"
+    exec agy ...$final_args
 }

@@ -53,9 +53,12 @@ export def containerfile [
 
     let no_cache_flag = if $no_cache { ["--no-cache"] } else { [] }
 
+    # --pull=newer refreshes floating base image tags (e.g. debian:trixie-slim).
+    # Local-only base images (localhost/...) are used as they are.
     let result = (
         ^podman build
             --authfile $empty_auth
+            --pull=newer
             --security-opt seccomp=unconfined
             -t $image_tag
             -f $build_containerfile

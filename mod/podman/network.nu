@@ -4,19 +4,8 @@ use std/log
 export def exists [
     network_name: string  # Network name
 ]: any -> bool {
-    let result = (^podman network ls --format json | complete)
-    if $result.exit_code != 0 {
-        log error $"Failed to list networks: ($result.stderr)"
-        return false
-    }
-
-    let count = (
-        $result.stdout
-        | from json
-        | where Name == $network_name
-        | length
-    )
-    ($count > 0)
+    let result = (^podman network exists $network_name | complete)
+    ($result.exit_code == 0)
 }
 
 # Create a bridge network

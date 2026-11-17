@@ -1,5 +1,5 @@
 use std log
-const GIT_MODULE_VERSION = "0.2.4"
+const GIT_MODULE_VERSION = "0.2.5"
 
 # Download a GitHub directory using git sparse checkout
 export def "download dir" [
@@ -50,17 +50,6 @@ export def "download dir" [
             log error $"Failed to download: ($result.stderr)"
         }
     }
-}
-
-# Download claude-code .devcontainer directory
-export def "download devcontainer" [
-    repo_url: string      # Upstream repository URL
-    repo_dir: string      # Directory to download from repository
-    repo_branch: string   # Branch to checkout
-    target_dir: string    # Local target directory
-]: any -> nothing {
-    log info "Downloading claude-code .devcontainer directory..."
-    download dir $repo_url $repo_dir $repo_branch $target_dir
 }
 
 # Download complete repository (full clone, not sparse)

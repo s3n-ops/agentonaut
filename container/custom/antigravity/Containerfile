@@ -1,7 +1,5 @@
-FROM docker.io/library/node:20-trixie-slim
-
 # Build stage for nu_plugin_formats
-FROM rust:slim AS nu-plugin-builder
+FROM docker.io/library/rust:slim AS nu-plugin-builder
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
@@ -18,13 +16,18 @@ RUN rustup update stable \
     && cargo install nu_plugin_formats --locked \
     && cargo install nu-lint --locked
 
-FROM docker.io/library/node:20-trixie-slim
+# Main stage
+FROM docker.io/library/debian:trixie-slim
 
 USER root
 
-RUN usermod -l gemini node \
-    && groupmod -n gemini node \
-    && usermod -d /home/gemini -m gemini
+RUN groupadd --gid 1000 antigravity \
+    && useradd \
+        --uid 1000 \
+        --gid 1000 \
+        --create-home \
+        --shell /bin/bash \
+        antigravity
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
@@ -41,6 +44,7 @@ RUN apt-get update \
         man-db \
         neovim \
         pipx \
+        procps \
         psl \
         psmisc \
         python3 \
@@ -108,21 +112,63 @@ RUN GITLEAKS_VERSION=$(curl -s https://api.github.com/repos/gitleaks/gitleaks/re
     && mv gitleaks /usr/local/bin/ \
     && rm -rf "gitleaks_${GITLEAKS_VERSION#v}"*
 
+# Install latest Go
+RUN GO_INFO=$(curl -s "https://go.dev/dl/?mode=json" | jq -r '.[0].files[] | select(.os=="linux" and .arch=="amd64" and .kind=="archive")') \
+    && GO_FILE=$(echo "${GO_INFO}" | jq -r .filename) \
+    && GO_SHA=$(echo "${GO_INFO}" | jq -r .sha256) \
+    && curl -LO "https://go.dev/dl/${GO_FILE}" \
+    && echo "${GO_SHA}  ${GO_FILE}" | sha256sum -c - \
+    && tar -C /usr/local -xzf "${GO_FILE}" \
+    && ln -s /usr/local/go/bin/go /usr/local/bin/go \
+    && ln -s /usr/local/go/bin/gofmt /usr/local/bin/gofmt \
+    && rm -f "${GO_FILE}"
+
+# Install latest golangci-lint from GitHub releases
+RUN GOLANGCI_LINT_VERSION=$(curl -s https://api.github.com/repos/golangci/golangci-lint/releases/latest | jq -r .tag_name) \
+    && curl -LO "https://github.com/golangci/golangci-lint/releases/download/${GOLANGCI_LINT_VERSION}/golangci-lint-${GOLANGCI_LINT_VERSION#v}-linux-amd64.tar.gz" \
+    && curl -LO "https://github.com/golangci/golangci-lint/releases/download/${GOLANGCI_LINT_VERSION}/golangci-lint-${GOLANGCI_LINT_VERSION#v}-checksums.txt" \
+    && sha256sum --ignore-missing -c "golangci-lint-${GOLANGCI_LINT_VERSION#v}-checksums.txt" \
+    && tar xzf "golangci-lint-${GOLANGCI_LINT_VERSION#v}-linux-amd64.tar.gz" \
+    && mv "golangci-lint-${GOLANGCI_LINT_VERSION#v}-linux-amd64/golangci-lint" /usr/local/bin/ \
+    && rm -rf "golangci-lint-${GOLANGCI_LINT_VERSION#v}"*
+
+# Install latest staticcheck from GitHub releases
+RUN STATICCHECK_VERSION=$(curl -s https://api.github.com/repos/dominikh/go-tools/releases/latest | jq -r .tag_name) \
+    && curl -LO "https://github.com/dominikh/go-tools/releases/download/${STATICCHECK_VERSION}/staticcheck_linux_amd64.tar.gz" \
+    && curl -LO "https://github.com/dominikh/go-tools/releases/download/${STATICCHECK_VERSION}/staticcheck_linux_amd64.tar.gz.sha256" \
+    && sha256sum -c "staticcheck_linux_amd64.tar.gz.sha256" \
+    && tar xzf "staticcheck_linux_amd64.tar.gz" \
+    && mv staticcheck/staticcheck /usr/local/bin/ \
+    && rm -rf staticcheck*
+
+# Install latest just from GitHub releases
+RUN JUST_VERSION=$(curl -s https://api.github.com/repos/casey/just/releases/latest | jq -r .tag_name) \
+    && curl -LO "https://github.com/casey/just/releases/download/${JUST_VERSION}/just-${JUST_VERSION}-x86_64-unknown-linux-musl.tar.gz" \
+    && curl -LO "https://github.com/casey/just/releases/download/${JUST_VERSION}/SHA256SUMS" \
+    && sha256sum --ignore-missing -c SHA256SUMS \
+    && tar xzf "just-${JUST_VERSION}-x86_64-unknown-linux-musl.tar.gz" just \
+    && mv just /usr/local/bin/ \
+    && rm -f "just-${JUST_VERSION}-x86_64-unknown-linux-musl.tar.gz" SHA256SUMS
+
 COPY --from=nu-plugin-builder /usr/local/cargo/bin/nu_plugin_formats /usr/local/bin/nu_plugin_formats
 COPY --from=nu-plugin-builder /usr/local/cargo/bin/nu-lint /usr/local/bin/nu-lint
 
-ARG GEMINI_VERSION=unknown
+ARG ANTIGRAVITY_VERSION=unknown
 ARG TZ=Europe/Berlin
 
-RUN npm install -g @google/gemini-cli \
-    && npm cache clean --force
+# Install Antigravity CLI (agy) via the official installer.
+# The installer resolves the latest build from Google's manifest server and
+# verifies it against the manifest's SHA512, so no pinned checksum is used here.
+RUN curl -fsSL https://antigravity.google/cli/install.sh \
+    | bash -s -- --dir /usr/local/bin \
+    && agy --version
 
-USER gemini
+USER antigravity
 RUN pipx install ansible \
     && pipx ensurepath
 USER root
 
-ENV GEMINI_VERSION=${GEMINI_VERSION}
+ENV ANTIGRAVITY_VERSION=${ANTIGRAVITY_VERSION}
 
 COPY bin/start.nu /usr/local/bin/start.nu
 RUN chmod +x /usr/local/bin/start.nu
@@ -130,19 +176,21 @@ RUN chmod +x /usr/local/bin/start.nu
 RUN ln -snf /usr/share/zoneinfo/${TZ} /etc/localtime \
     && echo "${TZ}" > /etc/timezone
 
+# agy keeps its state under ~/.gemini, inherited from the Gemini CLI it replaces.
 RUN mkdir -p /workspace \
-    && mkdir -p /home/gemini/.gemini \
-    && chmod 700 /home/gemini/.gemini \
-    && chown -R gemini:gemini /workspace /home/gemini/.gemini
+    && mkdir -p /home/antigravity/.gemini \
+    && chmod 700 /home/antigravity/.gemini \
+    && chown -R antigravity:antigravity /workspace /home/antigravity/.gemini
 
-USER gemini
+USER antigravity
 
 ENV SHELL=/bin/bash
 ENV TERM=xterm-256color
 ENV COLORTERM=truecolor
 ENV TZ=${TZ}
-ENV HOME=/home/gemini
-ENV GEMINI_CLI_THEME="GitHub Light"
+ENV HOME=/home/antigravity
+ENV GOPATH=/home/antigravity/go
+ENV PATH=/home/antigravity/go/bin:/usr/local/go/bin:${PATH}
 
 WORKDIR /workspace
 

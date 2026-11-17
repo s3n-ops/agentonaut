@@ -1,5 +1,5 @@
-use std log
-const PROFILE_MODULE_VERSION = "0.3.6"
+use std/log
+const PROFILE_MODULE_VERSION = "0.3.8"
 
 # Profile management for nested TOML structures
 #
@@ -9,15 +9,15 @@ const PROFILE_MODULE_VERSION = "0.3.6"
 #   [profile.agent.claude]
 #   description = "Claude AI agent"
 #
-#   [profile.container.gemini]
-#   description = "Gemini container"
+#   [profile.container.antigravity]
+#   description = "Antigravity container"
 #
 # Convert to list:
 #   $env.myapp.cfg.profile | profile convert-to-list
-#   → [{id: "claude", type: "agent", ...}, {id: "gemini", type: "container", ...}]
+#   → [{id: "claude", type: "agent", ...}, {id: "antigravity", type: "container", ...}]
 #
 # Fetch with type safety:
-#   profile fetch "gemini" $all_profiles "container"
+#   profile fetch "antigravity" $all_profiles "container"
 #
 
 #
@@ -27,7 +27,7 @@ const PROFILE_MODULE_VERSION = "0.3.6"
 # Flatten nested [profile.type.name] structures into a list of records with ID and Type
 # Examples:
 #   $env.myapp.cfg.profile | convert-to-list
-#   → Converts {container: {gemini: {...}}} to [{id: "gemini", type: "container", ...}]
+#   → Converts {container: {antigravity: {...}}} to [{id: "antigravity", type: "container", ...}]
 export def "convert-to-list" []: record -> list {
     items {|type, items|
         $items
@@ -102,7 +102,7 @@ export def "list-types" []: record -> list<string> {
 # Get all profiles of a specific type as a list of records
 # Examples:
 #   $env.myapp.cfg.profile | list-by-type "container"
-#   → [{id: "gemini", type: "container", ...}]
+#   → [{id: "antigravity", type: "container", ...}]
 export def "list-by-type" [
     profile_type: string
 ]: record -> list<record> {
@@ -125,7 +125,7 @@ export def "list-by-type" [
 # Fetch single profile by ID
 # Examples:
 #   fetch "claude" $profiles "agent" -> finds {id: "claude", type: "agent", ...}
-#   fetch "gemini" $profiles "container" -> finds {id: "gemini", type: "container", ...}
+#   fetch "antigravity" $profiles "container" -> finds {id: "antigravity", type: "container", ...}
 export def fetch [
     profile_id: string
     profiles: list
