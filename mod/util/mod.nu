@@ -1,5 +1,5 @@
 # String and Path Utilities
-const UTIL_MODULE_VERSION = "0.2.5"
+const UTIL_MODULE_VERSION = "0.2.6"
 
 # Create a filesystem-safe directory name from an arbitrary path
 # Converts: /workspace/my-path
@@ -23,7 +23,7 @@ export def "sanitize path" []: any -> string {
 
 # Sanitize app name to valid identifier (lowercase alphanumeric and underscores)
 export def "sanitize name" []: any -> string {
-    str downcase
+    str lowercase
     | str replace --all --regex '[^a-z0-9_]' '_'
 }
 

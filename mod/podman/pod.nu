@@ -88,9 +88,17 @@ export def rm [
     }
 }
 
-# List pods matching the agentonaut workspace filter
-export def ps []: any -> string {
-    let result = (^podman pod ls --filter "name=claude-workspace-" | complete)
+# List agentonaut pods, both agent pods and the shared MCP pod
+export def ps [
+    prefix: string = "agentonaut"  # Pod name prefix to filter by
+]: any -> string {
+    let result = (^podman pod ls --filter $"name=($prefix)-" | complete)
+
+    if $result.exit_code != 0 {
+        log error $"Failed to list pods: ($result.stderr | str trim)"
+        return ""
+    }
+
     $result.stdout
 }
 

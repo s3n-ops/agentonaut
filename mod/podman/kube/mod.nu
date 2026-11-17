@@ -141,8 +141,12 @@ export def "render template" [
         mkdir $output_dir
     }
 
-    # Save data to temp TOML file (cleaner string representation)
-    let temp_data_path = ($output_dir | path join "template-data.toml")
+    # Save data to temp TOML file (cleaner string representation).
+    # The name is derived from the output file so that concurrent renders into
+    # the same directory (one YAML per agent, plus the shared pod) do not
+    # overwrite each other's data before minijinja-cli reads it.
+    let output_stem = ($output_path | path basename | str replace --regex '\.[^.]*$' '')
+    let temp_data_path = ($output_dir | path join $"($output_stem)-data.toml")
     $data | to toml | save --force $temp_data_path
 
     # Render template with minijinja-cli

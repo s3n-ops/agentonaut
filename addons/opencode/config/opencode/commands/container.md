@@ -1,5 +1,7 @@
-description = "Inform the agent about its container environment and how to troubleshoot issues"
-prompt = """
+---
+description: Inform the agent about its container environment and how to troubleshoot issues
+---
+
 You are running inside a rootless Podman container.
 
 ## Environment
@@ -25,4 +27,3 @@ command1 \
 ```
 
 Ask the user to paste the raw output back. Process it as plain text or parse it as structured data (JSON, TSV) where applicable.
-"""

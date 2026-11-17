@@ -1,14 +1,14 @@
 #
 # Profile Architecture & Relationships
 #
-# profile.agent.* (claude, gemini)
-#   └─ 1:1 profile.container.* (claude, gemini)
+# profile.agent.* (claude, antigravity, opencode)
+#   └─ 1:1 profile.container.* (claude, antigravity, opencode)
 #
 # profile.kube.* (minimal, full, nushell, docs)   ← agent-agnostic MCP sets
 #   └─ 0:N profile.mcp.* (nushell, docs-mcp-server)
 #          └─ 1:1 profile.container.* (mcp-*)
 #
-# profile.docs.* (standalone: nushell, ansible, podman, claude-code)
+# profile.docs.* (standalone: nushell, ansible, podman, claude-code, yazi)
 #
 # Design:
 #  • Kube profiles define which MCP servers run alongside any agent.
@@ -21,16 +21,18 @@
 
 [agentonaut]
 path = "."
-default_agent = "gemini"
+default_agent = "antigravity"
 
-[profile.agent.gemini]
-container = "gemini"
-yaml_file = "conf/kube/gemini.yaml"
-data_path_host = "~/.local/share/agentonaut/gemini"
-data_path_container = "/home/gemini/.gemini"
-config_path = "~/.config/agentonaut/gemini/gemini.json"
-chat_base_path = "~/Documents/agentonaut/gemini"
-mcp_command = "gemini mcp add --transport {transport} {name} {url}"
+# Antigravity CLI (agy) keeps its whole state under ~/.gemini, inherited from
+# the Gemini CLI it replaces. It has no separate config file and no CLI command
+# to register MCP servers, so config_path and mcp_command are unset. MCP servers
+# are configured through ~/.gemini/config/mcp_config.json instead.
+[profile.agent.antigravity]
+container = "antigravity"
+yaml_file = "conf/kube/antigravity.yaml"
+data_path_host = "~/.local/share/agentonaut/antigravity"
+data_path_container = "/home/antigravity/.gemini"
+chat_base_path = "~/Documents/agentonaut/antigravity"
 
 [profile.agent.claude]
 container = "claude"
@@ -41,9 +43,30 @@ config_path = "~/.config/agentonaut/claude/claude.json"
 chat_base_path = "~/Documents/agentonaut/claude"
 mcp_command = "claude mcp add --transport {transport} {name} {url}"
 
+# OpenCode keeps config, data and state in data_path_host via XDG variables set
+# in the image. Provider credentials are stored with "opencode auth login" or
+# "/connect" in the TUI (e.g. OpenRouter with an API key) and land in the
+# SQLite database data/opencode/opencode.db. Models use the provider prefix,
+# e.g. openrouter/<provider>/<model>. MCP servers go into the global config,
+# so the workspace repository stays untouched.
+[profile.agent.opencode]
+container = "opencode"
+yaml_file = "conf/kube/opencode.yaml"
+data_path_host = "~/.local/share/agentonaut/opencode"
+data_path_container = "/home/opencode/.opencode"
+chat_base_path = "~/Documents/agentonaut/opencode"
+mcp_command = "opencode mcp add {name} --global --url {url}"
+
+# Each agent gets its own pod, named "<pod_prefix>-<agent>". This lets several
+# agents run side by side, for example antigravity for implementation and claude
+# for review, each with an independent lifecycle and its own workspace.
+#
+# shared_pod_name is the long-lived pod holding MCP servers that all agents use.
+# It lives in the same network, so agents reach it by pod name via Podman DNS.
 [agentonaut.podman]
 network = "agentonaut-network"
-pod_name = "agentonaut-pod"
+pod_prefix = "agentonaut"
+shared_pod_name = "agentonaut-shared"
 
 
 #
@@ -52,10 +75,13 @@ pod_name = "agentonaut-pod"
 # Agent-agnostic MCP sets: define which MCP servers run alongside any agent.
 # The agent determines the container image; the kube profile determines the MCPs.
 #
+# tmp_dir holds the rendered pod YAML. Each agent renders to its own file inside
+# this directory, so parallel launches do not overwrite each other.
 [kube]
 default_profile = "minimal"
-tmp_file_path = "/tmp/agentonaut/kube.yaml"
+tmp_dir = "/tmp/agentonaut"
 template_dir = "conf/kube/templates"
+shared_template = "shared-pod.yaml.j2"
 
 [profile.kube.minimal]
 description = "Agent only, no MCPs"
@@ -73,19 +99,30 @@ mcp_profiles = ["nushell"]
 description = "Docs MCP only"
 mcp_profiles = ["docs-mcp-server"]
 
+# shared = false: the MCP runs as a sidecar inside the agent's own pod and is
+#   reachable over the pod-local loopback. Use this for workspace-bound servers.
+# shared = true: the MCP runs in the shared pod and is addressed by that pod's
+#   DNS name. Use this for agent-neutral servers with host port mappings.
+#
+# mcp-nushell mounts the agent's workspace read-only, so it must stay pod-local.
 [profile.mcp.nushell]
 container = "mcp-nushell"
 yaml_file = "conf/kube/mcp-nushell.yaml"
 name = "mcp-nushell"
 transport = "http"
+shared = false
 url = "http://mcp-nushell:8001/mcp"
 
+# docs-mcp-server only mounts its index and the docs tree, both agent-neutral.
+# Sharing it avoids indexing the same documentation twice and frees the fixed
+# host ports 6280 and 6281, which no second pod could have bound.
 [profile.mcp.docs-mcp-server]
 container = "docs-mcp-server"
 yaml_file = "conf/kube/docs-mcp-server.yaml"
 name = "docs-mcp-server"
 transport = "http"
-url = "http://docs-mcp-server:6280/mcp"
+shared = true
+url = "http://agentonaut-shared:6280/mcp"
 web_url = "http://127.0.0.1:6280"
 
 #
@@ -139,6 +176,15 @@ depth = 1
 description = "Claude Code Documentation"
 library_name = "claude-code-documentation"
 mcp_url = "file:///docs/claude-code/docs"
+
+[profile.docs.yazi]
+repo = "https://github.com/yazi-rs/yazi-rs.github.io.git"
+target_dir = "yazi"
+branch = "main"
+depth = 1
+description = "Yazi terminal file manager documentation"
+library_name = "yazi-documentation"
+mcp_url = "file:///docs/yazi/docs"
 
 [profile.docs.resticprofile]
 repo = "https://github.com/creativeprojects/resticprofile.git"
@@ -419,16 +465,6 @@ mcp_url = "file:///docs/rust/src"
 # base_image_override: Optional base image override (replaces FROM statement in containerfile)
 # description: Human-readable description
 
-[profile.container.claude-contrib]
-origin = "upstream"
-repo = "https://github.com/anthropics/claude-code"
-local_dir = "container/contrib/claude-code"
-containerfile = ".devcontainer/Dockerfile"
-context = ".devcontainer"
-image_tag = "localhost/claude-code-devcontainer:latest"
-base_image_override = "node:20-trixie"
-description = "Base Claude Code devcontainer image from upstream"
-
 [profile.container.claude]
 origin = "local"
 local_dir = "container/custom/claude-code"
@@ -445,30 +481,34 @@ container_args = []
 podman_mounts = []
 env_vars = { CLAUDE_CODE_ENABLE_TELEMETRY = "0" }
 
-[profile.container.gemini-contrib]
-origin = "upstream"
-repo = "https://github.com/google-gemini/gemini-cli"
-local_dir = "container/contrib/gemini"
-containerfile = "Dockerfile"
-context = "."
-image_tag = "localhost/gemini-contrib:latest"
-description = "Official Gemini CLI container image from upstream"
-
-[profile.container.gemini]
+[profile.container.antigravity]
 origin = "local"
-local_dir = "container/custom/gemini"
+local_dir = "container/custom/antigravity"
 containerfile = "Containerfile"
 context = "."
-image_tag = "localhost/gemini:latest"
-home_path = "/home/gemini"
-description = "Google Gemini CLI container"
+image_tag = "localhost/antigravity:latest"
+home_path = "/home/antigravity"
+description = "Google Antigravity CLI (agy) container"
 depends_on = []
-version_check = { repo = "https://github.com/google-gemini/gemini-cli", build_arg = "GEMINI_VERSION" }
+version_check = { repo = "https://github.com/google-antigravity/antigravity-cli", build_arg = "ANTIGRAVITY_VERSION" }
 podman_args = ["--security-opt", "seccomp=unconfined"]
 podman_mounts = [
-    { source = "~/.local/share/agentonaut/gemini", target = "/home/gemini/.gemini", mode = "rw" },
+    { source = "~/.local/share/agentonaut/antigravity", target = "/home/antigravity/.gemini", mode = "rw" },
 ]
-env_vars = { GEMINI_TELEMETRY_ENABLED = "false" }
+
+# The repository also tags other components (e.g. vscode-v1.0.0), so
+# tag_pattern restricts the version check to the v2 CLI releases.
+[profile.container.opencode]
+origin = "local"
+local_dir = "container/custom/opencode"
+containerfile = "Containerfile"
+context = "."
+image_tag = "localhost/opencode:latest"
+home_path = "/home/opencode"
+description = "OpenCode AI coding agent container"
+version_check = { repo = "https://github.com/anomalyco/opencode", build_arg = "OPENCODE_VERSION", tag_pattern = '^v2\.\d+\.\d+$' }
+depends_on = []
+podman_args = []
 
 [profile.container.mcp-nushell]
 origin = "local"

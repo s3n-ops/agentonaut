@@ -1,0 +1,82 @@
+FROM docker.io/library/debian:trixie-slim
+
+USER root
+
+RUN groupadd --gid 1000 opencode \
+    && useradd \
+        --uid 1000 \
+        --gid 1000 \
+        --create-home \
+        --shell /bin/bash \
+        opencode
+
+# Install base packages
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+        ca-certificates \
+        curl \
+        git \
+        jq \
+        less \
+        neovim \
+        procps \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install latest Nushell from GitHub releases
+RUN NUSHELL_VERSION=$(curl -s https://api.github.com/repos/nushell/nushell/releases/latest | jq -r .tag_name) \
+    && curl -LO "https://github.com/nushell/nushell/releases/download/${NUSHELL_VERSION}/nu-${NUSHELL_VERSION}-x86_64-unknown-linux-gnu.tar.gz" \
+    && curl -LO "https://github.com/nushell/nushell/releases/download/${NUSHELL_VERSION}/SHA256SUMS" \
+    && sha256sum --ignore-missing -c SHA256SUMS \
+    && tar xzf "nu-${NUSHELL_VERSION}-x86_64-unknown-linux-gnu.tar.gz" \
+    && mv "nu-${NUSHELL_VERSION}-x86_64-unknown-linux-gnu/nu" /usr/local/bin/ \
+    && rm -rf "nu-${NUSHELL_VERSION}-x86_64-unknown-linux-gnu"* SHA256SUMS
+
+# Agentonaut passes the newest v2 tag via version_check. The GitHub API's
+# "latest" release points to the v1 line, so there is no fallback here.
+ARG OPENCODE_VERSION
+ARG TZ=Europe/Berlin
+
+# Install the static OpenCode binary from the GitHub release and verify it
+# against the release's SHA256SUMS.
+RUN test -n "${OPENCODE_VERSION}" \
+    && base_url="https://github.com/anomalyco/opencode/releases/download/v${OPENCODE_VERSION}" \
+    && cd /tmp \
+    && curl -fLO "${base_url}/opencode-linux-x64.tar.gz" \
+    && curl -fLO "${base_url}/SHA256SUMS" \
+    && sha256sum --ignore-missing -c SHA256SUMS \
+    && tar xzf opencode-linux-x64.tar.gz -C /usr/local/bin opencode \
+    && rm opencode-linux-x64.tar.gz SHA256SUMS \
+    && opencode --version
+
+ENV OPENCODE_VERSION=${OPENCODE_VERSION}
+
+COPY bin/start.nu /usr/local/bin/start.nu
+RUN chmod +x /usr/local/bin/start.nu
+
+RUN ln -snf /usr/share/zoneinfo/${TZ} /etc/localtime \
+    && echo "${TZ}" > /etc/timezone
+
+# ~/.opencode is the mounted data directory. The XDG variables below place
+# config, data (including the credential database) and state inside it.
+RUN mkdir -p /workspace /home/opencode/.opencode \
+    && chmod 700 /home/opencode/.opencode \
+    && chown -R opencode:opencode /workspace /home/opencode
+
+USER opencode
+
+ENV SHELL=/bin/bash
+ENV TERM=xterm-256color
+ENV COLORTERM=truecolor
+ENV TZ=${TZ}
+ENV HOME=/home/opencode
+ENV EDITOR=nvim
+ENV VISUAL=nvim
+ENV XDG_CONFIG_HOME=/home/opencode/.opencode/config
+ENV XDG_DATA_HOME=/home/opencode/.opencode/data
+ENV XDG_STATE_HOME=/home/opencode/.opencode/state
+ENV OPENCODE_DISABLE_AUTOUPDATE=true
+
+WORKDIR /workspace
+
+CMD ["sleep", "infinity"]

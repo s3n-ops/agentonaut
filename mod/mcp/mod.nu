@@ -1,6 +1,6 @@
-use std log
+use std/log
 
-const MCP_MODULE_VERSION = "0.6.10"
+const MCP_MODULE_VERSION = "0.6.12"
 
 #
 # Register MCPs in running container from config
@@ -28,7 +28,7 @@ export def register [
     )
 
     let container_workspace = $"/workspace/($workspace_sanitized)"
-    let full_container_name = $"($cfg_data.agentonaut_podman_pod_name)-($cfg_data.container_name)"
+    let full_container_name = $"($cfg_data.pod_name)-($cfg_data.container_name)"
 
     log info $"Registering ($mcps | length) MCPs in container"
 

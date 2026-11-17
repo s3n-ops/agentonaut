@@ -16,8 +16,8 @@ def main [] {
 
     # Pre-flight check with minimum versions
     let requirements = [
-        { name: "podman",        cmd: "podman",        min_version: "4.4.0" }
-        { name: "nushell",       cmd: "nu",            min_version: "0.111.0" }
+        { name: "podman",        cmd: "podman",        min_version: "5.0.0" }
+        { name: "nushell",       cmd: "nu",            min_version: "0.114.0" }
         { name: "minijinja-cli", cmd: "minijinja-cli", min_version: "2.0.0" }
         { name: "git",           cmd: "git",           min_version: "2.25.0" }
     ]
@@ -73,7 +73,7 @@ def confirm_install [project_root: path, target: path, user_config_dir: path, us
     ] | print --raw
     print ""
 
-    let answer = (input "Proceed with installation? [y/N] " | str trim | str downcase)
+    let answer = (input "Proceed with installation? [y/N] " | str trim | str lowercase)
     $answer == "y"
 }
 
@@ -94,10 +94,8 @@ def check_rootless []: nothing -> bool {
         try { (^podman unshare echo "ok" | str trim) == "ok" } catch { false }
     )
 
-    # Rootless network tool (one required)
-    let has_slirp4netns = (which "slirp4netns" | is-not-empty)
-    let has_pasta = (which "pasta" | is-not-empty)
-    let network_ok = ($has_slirp4netns or $has_pasta)
+    # Rootless network tool. Podman 6 removed slirp4netns, pasta is the only one left.
+    let network_ok = (which "pasta" | is-not-empty)
 
     # subuid/subgid entries for current user
     let subuid_ok = (
@@ -111,7 +109,7 @@ def check_rootless []: nothing -> bool {
         { name: "user namespaces (podman unshare)", status: (if $unshare_ok { $"(ansi green)OK(ansi reset)" } else { $"(ansi red)Failed(ansi reset)" }) }
         { name: $"/etc/subuid entry for ($env.USER)",   status: (if $subuid_ok  { $"(ansi green)OK(ansi reset)" } else { $"(ansi red)Missing(ansi reset)" }) }
         { name: $"/etc/subgid entry for ($env.USER)",   status: (if $subgid_ok  { $"(ansi green)OK(ansi reset)" } else { $"(ansi red)Missing(ansi reset)" }) }
-        { name: $"network tool \(slirp4netns/pasta\)",  status: (if $network_ok { $"(ansi green)OK(ansi reset)" } else { $"(ansi red)Not found(ansi reset)" }) }
+        { name: "network tool (pasta)",                 status: (if $network_ok { $"(ansi green)OK(ansi reset)" } else { $"(ansi red)Not found(ansi reset)" }) }
     ]
 
     $results | select name status | print
@@ -129,11 +127,11 @@ def check_rootless []: nothing -> bool {
 
     if not $network_ok {
         [
-            $"(ansi red)Error: No rootless network tool found. Install slirp4netns or pasta.(ansi reset)"
+            $"(ansi red)Error: pasta not found. Install the passt package.(ansi reset)"
             "Examples:"
-            "  sudo apt install slirp4netns   # Debian/Ubuntu"
-            "  sudo dnf install slirp4netns   # Fedora/RHEL"
-            "  sudo pacman -S passt           # Arch (provides pasta)"
+            "  sudo apt install passt     # Debian/Ubuntu"
+            "  sudo dnf install passt     # Fedora/RHEL"
+            "  sudo pacman -S passt       # Arch"
             "See: https://docs.podman.io/en/latest/markdown/podman.1.html#rootless-mode"
         ] | print --raw
     }
@@ -334,7 +332,7 @@ def run_git_download [wrapper: path] {
 # Agent Add-On Installation
 def run_agent_setup [wrapper: path] {
     print $"(ansi yellow)» Installing agent add-ons...(ansi reset)"
-    for agent in ["claude" "gemini"] {
+    for agent in ["claude" "antigravity"] {
         ^$wrapper agent setup $agent
     }
 }

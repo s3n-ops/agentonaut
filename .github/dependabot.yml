@@ -6,7 +6,7 @@ updates:
       interval: "weekly"
 
   - package-ecosystem: "docker"
-    directory: "/container/custom/gemini"
+    directory: "/container/custom/antigravity"
     schedule:
       interval: "weekly"
 

@@ -1,5 +1,5 @@
 use std/log
-const CFG_MODULE_VERSION = "0.8.5"
+const CFG_MODULE_VERSION = "0.8.6"
 
 # Loads TOML config into $env.<app_name>.
 # Prioritizes ease of use over module purity by design.
@@ -18,7 +18,7 @@ export def --env init [
     config_name: string = "config"
     --preprocessor: closure  # Optional: process file content before parsing (e.g., decrypt)
 ]: any -> nothing {
-    let env_name = ($app_name | str downcase)
+    let env_name = ($app_name | str lowercase)
 
     # Determine application root path (caller in bin/, so root is ../)
     # Note: $env.FILE_PWD points to the directory containing the script (bin/), not the script file itself.
@@ -117,7 +117,7 @@ export def --env reload [
 ]: any -> nothing {
 
     # Use app_name (lowercase) as namespace
-    let env_name = ($app_name | str downcase)
+    let env_name = ($app_name | str lowercase)
 
     # Determine application root path
     let root_path = ($env.FILE_PWD | path dirname)

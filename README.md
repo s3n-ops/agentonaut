@@ -4,7 +4,7 @@
   <img src="assets/agentonaut-logo.png" alt="Agentonaut" width="200">
 </p>
 
-A containerized, isolated environment for AI CLI agents (Claude Code, Gemini CLI) using Podman and Nushell, with built-in optional MCP server orchestration.
+A containerized, isolated environment for AI CLI agents (Claude Code, Antigravity CLI) using Podman and Nushell, with built-in optional MCP server orchestration.
 
 ## Overview
 
@@ -19,11 +19,11 @@ Agentonaut can be customized and extended with profiles and custom local contain
 
 Tested on Linux. The install script runs a pre-flight check before proceeding.
 
-- Podman (v4.4.0+), configured for rootless use:
+- Podman (v5.0.0+), configured for rootless use:
   - `/etc/subuid` and `/etc/subgid` must have entries for the user
-  - `slirp4netns` or `pasta` must be installed for rootless networking
+  - `pasta` (package `passt`) must be installed for rootless networking
   - See [Rootless mode](https://docs.podman.io/en/latest/markdown/podman.1.html#rootless-mode) in the Podman documentation
-- Nushell (v0.111.0+)
+- Nushell (v0.114.0+)
 - minijinja-cli (v2.0.0+, `cargo install minijinja-cli`)
 - git (v2.25.0+)
 
@@ -84,9 +84,11 @@ Mount a project directory and start an agent session. To resume a previous sessi
 
 ```shell
 agentonaut launch ~/projects/my-project
-agentonaut launch ~/projects/my-project --agent gemini
+agentonaut launch ~/projects/my-project --agent antigravity
 agentonaut launch ~/projects/my-project --agent claude --profile full
 agentonaut launch ~/projects/my-project --add-workspace [~/projects/my-second-project,~/projects/your-project] --agent claude
+agentonaut launch ~/projects/my-project --dangerously-skip-permissions
+agentonaut launch ~/projects/my-project --model gemini-2.5-pro --prompt "Run tests and fix errors"
 ```
 
 #### Chat
@@ -95,6 +97,8 @@ For quick sessions without a project context. Each session is stored in a date-s
 
 ```shell
 agentonaut chat
+agentonaut chat --dangerously-skip-permissions
+agentonaut chat --prompt "Explain the difference between Podman and Docker"
 ```
 
 #### Abort
@@ -120,15 +124,15 @@ Build and manage the Podman container images defined in the profile configuratio
 
 ```shell
 agentonaut image build all
-agentonaut image build claude-contrib --force-rebuild
+agentonaut image build claude
 agentonaut image cleanup dangling
 ```
 
-To update an agent to a newer version, rebuild its image with `--force-rebuild`:
+Every build updates the image: upstream profiles download their sources first, newer base images are pulled, and the build runs without cache. All installed software is then at its latest version. To update an agent, rebuild its image:
 
 ```shell
-agentonaut image build claude --force-rebuild
-agentonaut image build gemini --force-rebuild
+agentonaut image build claude
+agentonaut image build antigravity
 ```
 
 The **`by`** subcommand filters profiles by a field value, available for `image build`, `image remove`, and `git download`:
@@ -213,7 +217,7 @@ An agent profile references one container profile. A kube profile references zer
 #### Flat View
 
 ```
-profile.agent.*       # Agent definitions (claude, gemini)
+profile.agent.*       # Agent definitions (claude, antigravity)
 profile.kube.*        # Pod configurations (agent + MCP sidecars)
 profile.mcp.*         # MCP server definitions
 profile.container.*   # Container image build definitions
@@ -223,8 +227,8 @@ profile.docs.*        # Offline documentation repositories
 #### Tree View
 
 ```
-profile.agent.*  (claude, gemini)
-└── 1:1  profile.container.*  (claude, gemini)
+profile.agent.*  (claude, antigravity)
+└── 1:1  profile.container.*  (claude, antigravity)
 
 profile.kube.*  (minimal, full, nushell, docs)
 └── 0:N  profile.mcp.*  (nushell, docs-mcp-server)
@@ -294,7 +298,7 @@ Launch it with any agent:
 
 ```Shell
 agentonaut launch ~/Projects/my-project --agent claude --profile custom
-agentonaut launch ~/Projects/my-project --agent gemini --profile custom
+agentonaut launch ~/Projects/my-project --agent antigravity --profile custom
 ```
 
 ### Adding a Documentation Profile
@@ -329,6 +333,10 @@ agentonaut docs download my-tool
 agentonaut docs index my-tool
 ```
 
+## OpenCode Providers
+
+Connect a provider inside the session with `/connect`, or run `opencode auth login openrouter --method key` in the container. The key is stored in `~/.local/share/agentonaut/opencode/data/opencode/opencode.db`. Select the model with `/models` or `agentonaut launch <dir> --agent opencode --model openrouter/<provider>/<model>`.
+
 ## Agent Add-Ons
 
 Add-ons extend agents with slash commands, skills, and sub-agents. They are stored in `addons/<agent>/` in the project directory and installed to the agent's data directory (`~/.local/share/agentonaut/<agent>/`).
@@ -337,7 +345,7 @@ Add-ons extend agents with slash commands, skills, and sub-agents. They are stor
 
 ```Shell
 agentonaut agent setup claude
-agentonaut agent setup gemini
+agentonaut agent setup antigravity
 ```
 
 Use `--overwrite` to update existing files after changes:
@@ -350,19 +358,29 @@ agentonaut agent setup claude --overwrite
 
 Commands are available as slash commands inside an agent session.
 
-| Slash Command | Claude | Gemini | Description |
-|---------|--------|--------|-------------|
-| `/checkpoint` | yes | yes | Save session progress to a markdown file |
-| `/manual <topic>` | yes | yes | Search docs-mcp-server for documentation |
-| `/git:commit` | no | yes | Generate a git commit message, without running git commit |
-| `/git-commit` | yes | no | Generate a git commit message, without running git commit |
-| `/lang <language>` | yes | yes | Set the session language (e.g. `/lang en`, `/lang es`, `/lang fr`, `/lang de`) |
-| `/nu <expression>` | yes | yes | Execute a Nushell expression via mcp-nushell |
-| `/container` | yes | yes | Inform the agent about its container environment and how to troubleshoot issues |
+| Slash Command | Claude | Antigravity | OpenCode | Description |
+|---------|--------|--------|--------|-------------|
+| `/checkpoint` | yes | yes | yes | Save session progress to a markdown file |
+| `/manual <topic>` | yes | yes | yes | Search docs-mcp-server for documentation |
+| `/git-commit` | yes | yes | yes | Check the diff for secrets, stage the changes and commit them with a short message |
+| `/git-message` | yes | yes | yes | Generate a git commit message without running git commit |
+| `/lang <language>` | yes | yes | yes | Set the session language (e.g. `/lang en`, `/lang es`, `/lang fr`, `/lang de`) |
+| `/nu <expression>` | yes | yes | yes | Execute a Nushell expression via mcp-nushell |
+| `/container` | yes | yes | yes | Inform the agent about its container environment and how to troubleshoot issues |
+| `/aistyle` | yes | yes | yes | Enforce an authentic, technical communication style |
+| `/code-quality` | yes | yes | yes | Review code for idiom, correctness, consistency, testability, justifiability, and code volume |
+| `/markdown` | yes | yes | yes | Convert text into portable Markdown for README files and repository docs |
+| `/obsidian` | yes | yes | yes | Convert text into a structured Obsidian note with frontmatter and tags |
 
-### Skills (Claude)
+Claude loads these from `addons/claude/` (commands and skills). Antigravity
+loads them as Agent Skills from `addons/antigravity/`; Antigravity CLI dropped
+the TOML custom-command format that Gemini CLI used. OpenCode loads commands,
+skills and the Nushell subagent from `addons/opencode/`.
 
-Skills are invoked automatically based on context, or explicitly by name.
+### Skills
+
+Skills are invoked automatically based on context, or explicitly by name. The
+skills below are Claude-only, since they depend on MCP sidecars.
 
 #### docs-search
 Searches docs-mcp-server for offline documentation. Activates when the question requires precise syntax, correct code examples, or discovery of unknown functionality. Requires a running `docs-mcp-server` with indexed libraries.
@@ -399,7 +417,7 @@ Host paths are sanitized and mapped to unique container paths.
 /workspace/home-user-projects-my-app
 ```
 
-Claude Code and Gemini CLI store per-directory state under `~/.local/share/...`. Without a unique mapping, both tools would treat every session as the same project. For this reason, distinct host directories must map to unique paths inside the container.
+Claude Code and Antigravity CLI store per-directory state under `~/.local/share/...`. Without a unique mapping, both tools would treat every session as the same project. For this reason, distinct host directories must map to unique paths inside the container.
 
 ### Agent Data Persistence
 
@@ -421,8 +439,8 @@ Configurations are managed as nested TOML tables (Cargo-style), providing hierar
 **Example:**
 
 ```toml
-[profile.agent.gemini]
-container = "gemini"
+[profile.agent.antigravity]
+container = "antigravity"
 
 [profile.agent.claude]
 container = "claude"
@@ -435,7 +453,7 @@ container = "mcp-nushell"
 url = "http://mcp-nushell:8001/mcp"
 ```
 
-The TOML key becomes the profile ID (`claude`, `gemini`, `devops`). Agent profiles define the container image. Kube profiles define which MCPs run alongside. The combination is chosen at launch time via `--agent` and `--profile`.
+The TOML key becomes the profile ID (`claude`, `antigravity`, `devops`). Agent profiles define the container image. Kube profiles define which MCPs run alongside. The combination is chosen at launch time via `--agent` and `--profile`.
 
 ### Declarative Pod Orchestration
 
@@ -466,7 +484,7 @@ AI agents process whatever data they are given access to and prompted to work wi
 
 Never mount credentials, API keys, SSH keys, or files with production secrets into the agent container. Use [SOPS](https://github.com/getsops/sops) or [Ansible Vault](https://docs.ansible.com/ansible/latest/vault_guide/index.html) to encrypt secrets at rest. Pass only what the agent needs for the task at hand.
 
-Inform the agent about its environment via `CLAUDE.md` or `GEMINI.md`. Explicitly state that secrets are intentionally absent from the container and instruct the agent to work with mock data instead. Agents generally respect this and adapt their behavior accordingly.
+Inform the agent about its environment via `CLAUDE.md` or `AGENTS.md`. Explicitly state that secrets are intentionally absent from the container and instruct the agent to work with mock data instead. Agents generally respect this and adapt their behavior accordingly.
 
 ### Sensitive Documents
 
@@ -504,9 +522,9 @@ Podman supports Kubernetes YAML natively via [`podman kube play`](https://docs.p
 
 ### Why not Use Built-in Sandboxing?
 
-Both Claude Code and Gemini CLI include built-in sandboxing.
+Both Claude Code and Antigravity CLI include built-in sandboxing.
 Claude Code uses [bubblewrap](https://code.claude.com/docs/en/sandboxing#os-level-enforcement) on Linux.
-Gemini CLI supports [container-based sandboxing](https://geminicli.com/docs/cli/sandbox/#2-container-based-dockerpodman) via Docker or Podman.
+Antigravity CLI offers a `--sandbox` flag that restricts terminal access within the session.
 
 Agentonaut also uses Podman, but puts the container definition under user control:
 
@@ -520,7 +538,7 @@ Both agents run in a customizable container environment, with your toolset, rega
 MCP servers run as isolated containers in the same pod as the agent container, communicating within the pod's shared network namespace.
 
 #### Unified launcher
-One command launches any agent with a matching profile. Switching between Claude Code and Gemini is a single flag, useful when quota is exhausted or a second opinion is needed.
+One command launches any agent with a matching profile. Switching between Claude Code and Antigravity is a single flag, useful when quota is exhausted or a second opinion is needed.
 
 ### Configuration Loading
 
@@ -557,23 +575,23 @@ On systems without SELinux (e.g. most Debian and Ubuntu installations), Podman i
 
 ### Custom Container Strategy
 
-Agentonaut uses custom [`Containerfile`](https://github.com/opencontainers/image-spec) definitions for Gemini and Claude Code instead of using official images directly. Containerfiles are the OCI-standard equivalent of Dockerfiles.
+Agentonaut uses custom [`Containerfile`](https://github.com/opencontainers/image-spec) definitions for Antigravity and Claude Code instead of using official images directly. Containerfiles are the OCI-standard equivalent of Dockerfiles.
 
 #### Independent Build for Claude
 
 The Claude Code custom container is built directly on `debian:trixie-slim`. Claude Code is installed via the official install script, which uses Bun as its runtime. See the official https://github.com/anthropics/claude-code/blob/main/.devcontainer/Dockerfile for reference.
 
-#### Independent Build for Gemini
+#### Independent Build for Antigravity
 
-An [official Dockerfile](https://github.com/google-gemini/gemini-cli/blob/main/Dockerfile) for Gemini CLI exists, based on `node:20-slim`. The custom Agentonaut image uses `node:20-trixie-slim` instead and adds a similar toolset to the Claude container. The official image is available as the `gemini-contrib` profile but is not used as a base for the custom container.
+Antigravity CLI (`agy`) is a closed-source Go binary with no official container image. The custom Agentonaut image is built on `node:20-trixie-slim` and installs `agy` via the [official installer](https://antigravity.google/download#antigravity-cli), which verifies the download against a SHA512 manifest. The toolset matches the Claude container.
 
 #### Unified Tooling
 
 Customizing both environments allows Agentonaut to provide a suite of tools (Nushell, Ripgrep, Ansible, etc.) and system configurations (e.g., host-synchronized timezones) across all agents.
 
-#### Version-Aware Builds
+#### Always-Current Builds
 
-Container profiles that track an upstream repository (e.g., Gemini CLI, Nushell MCP) carry a `version_check` field. Before building, Agentonaut fetches the latest upstream release tag via `git ls-remote` and compares it to the version baked into the existing image. If the versions match, the build is skipped. If they differ, the image is rebuilt with the new version passed as a build argument. Use `--force-rebuild` to bypass the check.
+Container profiles that track an upstream repository (e.g., Antigravity CLI, Nushell MCP) carry a `version_check` field. Before building, Agentonaut fetches the latest upstream release tag via `git ls-remote` and passes it to the build as a build argument. The build fails if no version can be determined. Every build pulls a newer base image if the registry has one and runs without cache.
 
 ## Testing
 
@@ -683,8 +701,8 @@ This typically happens when several images are built in sequence during a fresh 
 Wait a few minutes, then rebuild the affected image:
 
 ```Shell
-agentonaut image build gemini --force-rebuild
-agentonaut image build mcp-nushell --force-rebuild
+agentonaut image build antigravity
+agentonaut image build mcp-nushell
 ```
 
 ## AI Disclosure

@@ -5,7 +5,7 @@
 # instead of the built-in, causing infinite recursion in any function that calls
 # `help <cmd>` internally. Two-word names like "help modify" or "help general" are safe.
 
-const SCRIPT_MODULE_VERSION = "0.8.21"
+const SCRIPT_MODULE_VERSION = "0.8.22"
 const HIDDEN_NAMESPACES = ["test"]
 const MAIN_CMD = "main"
 
@@ -202,14 +202,14 @@ export def "set-nested-path" [record: record, path_parts: list<any>, value: any]
 # Looks for: MYAPP_SECTION_KEY in environment
 # Updates: $env.myapp.section.key
 export def --env "env override" [app_name: string, config_path: string]: any -> nothing {
-    let app_name_upper = ($app_name | str upcase)
-    let config_path_upper = ($config_path | str upcase | str replace --all "." "_")
+    let app_name_upper = ($app_name | str uppercase)
+    let config_path_upper = ($config_path | str uppercase | str replace --all "." "_")
     let env_var_name = $"($app_name_upper)_($config_path_upper)"
 
     if not ($env_var_name in $env) { return }
 
     let env_value = ($env | get --optional $env_var_name)
-    let app_namespace = ($app_name | str downcase)
+    let app_namespace = ($app_name | str lowercase)
     let current_config = ($env | get --optional $app_namespace | default {})
     let path_parts = ($config_path | split row '.')
     let updated_config = (set-nested-path $current_config $path_parts $env_value)

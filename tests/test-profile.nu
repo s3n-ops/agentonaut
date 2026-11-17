@@ -1,6 +1,6 @@
 const NU_LIB_DIRS = [(path self "../mod")]
 
-use std assert
+use std/assert
 use std/testing *
 
 use profile
@@ -10,7 +10,7 @@ def setup [] {
     {
         profiles: {
             container: {
-                gemini: {description: "Gemini container"}
+                antigravity: {description: "Antigravity container"}
                 claude: {description: "Claude container"}
             }
             mcp: {
@@ -29,14 +29,14 @@ def "convert-to-list returns all profiles as flat list" []: record -> nothing {
 @test
 def "convert-to-list adds id and type fields" []: record -> nothing {
     let result = ($in.profiles | profile convert-to-list)
-    let gemini = ($result | where id == "gemini" | first)
-    assert equal $gemini.id "gemini"
-    assert equal $gemini.type "container"
+    let antigravity = ($result | where id == "antigravity" | first)
+    assert equal $antigravity.id "antigravity"
+    assert equal $antigravity.type "container"
 }
 
 @test
 def "list-names returns sorted names for type" []: record -> nothing {
-    assert equal ($in.profiles | profile list-names "container") ["claude" "gemini"]
+    assert equal ($in.profiles | profile list-names "container") ["antigravity" "claude"]
 }
 
 @test
@@ -64,8 +64,8 @@ def "list-by-type returns empty list for unknown type" []: record -> nothing {
 
 @test
 def "get-nested finds profile by type and name" []: record -> nothing {
-    let result = ($in.profiles | profile get-nested "container" "gemini")
-    assert equal $result.id "gemini"
+    let result = ($in.profiles | profile get-nested "container" "antigravity")
+    assert equal $result.id "antigravity"
     assert equal $result.type "container"
 }
 
@@ -78,14 +78,14 @@ def "get-nested errors on missing profile name" []: record -> nothing {
 @test
 def "get-nested errors on missing profile type" []: record -> nothing {
     let ctx = $in
-    assert error { $ctx.profiles | profile get-nested "nonexistent" "gemini" }
+    assert error { $ctx.profiles | profile get-nested "nonexistent" "antigravity" }
 }
 
 @test
 def "fetch finds profile by id and type" []: record -> nothing {
     let all = ($in.profiles | profile convert-to-list)
-    let result = (profile fetch "gemini" $all "container")
-    assert equal $result.id "gemini"
+    let result = (profile fetch "antigravity" $all "container")
+    assert equal $result.id "antigravity"
     assert equal $result.type "container"
 }
 
@@ -153,14 +153,14 @@ def "query with-repo returns empty list when no profile has repo" []: record -> 
 
 @test
 def "extract returns only specified fields" []: record -> nothing {
-    let profile = {id: "gemini" type: "container" yaml_file: "gemini.yaml"}
+    let profile = {id: "antigravity" type: "container" yaml_file: "antigravity.yaml"}
     let result = (profile extract $profile "id" "type")
-    assert equal $result {id: "gemini" type: "container"}
+    assert equal $result {id: "antigravity" type: "container"}
 }
 
 @test
 def "extract returns null for missing fields" []: record -> nothing {
-    let profile = {id: "gemini" type: "container"}
+    let profile = {id: "antigravity" type: "container"}
     let result = (profile extract $profile "id" "nonexistent")
     assert equal $result.nonexistent null
 }
@@ -172,9 +172,9 @@ def "extract returns null for missing fields" []: record -> nothing {
 @test
 def "fetch multiple returns record keyed by profile id" []: record -> nothing {
     let all = ($in.profiles | profile convert-to-list)
-    let result = (profile fetch multiple ["gemini" "claude"] $all)
-    assert equal ($result | columns | sort) ["claude" "gemini"]
-    assert equal $result.gemini.type "container"
+    let result = (profile fetch multiple ["antigravity" "claude"] $all)
+    assert equal ($result | columns | sort) ["antigravity" "claude"]
+    assert equal $result.antigravity.type "container"
 }
 
 @test

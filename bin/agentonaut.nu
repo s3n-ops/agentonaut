@@ -11,7 +11,7 @@ use git
 use version
 use mcp
 
-const AGENTONAUT_VERSION = "0.39.10"
+const AGENTONAUT_VERSION = "0.39.19"
 
 # Initialize configuration (singleton - loads once)
 cfg init "agentonaut"
@@ -98,7 +98,7 @@ def "main pod rm" [
 }
 
 # Download a single upstream container profile by ID, or list available profiles
-@example "agentonaut git download claude-contrib" { agentonaut git download claude-contrib }
+@example "agentonaut git download docs-mcp-server-contrib" { agentonaut git download docs-mcp-server-contrib }
 @example "agentonaut git download" { agentonaut git download }
 def "main git download" [
     profile_name?: string    # Profile to download. Omit to list available profiles.
@@ -326,9 +326,7 @@ def "main docs index" [
         return
     }
 
-    let pod_name = $env.agentonaut.cfg.agentonaut.podman.pod_name
-    let mcp_profile = ($env.agentonaut.cfg.profile | profile get-nested "mcp" "docs-mcp-server")
-    let container_name = $"($pod_name)-($mcp_profile.container)"
+    let container_name = (docs-mcp-container-name)
 
     let doc = (
         try {
@@ -404,9 +402,8 @@ def "main docs index all" []: nothing -> nothing {
 # Requires the pod to be running (start with: agentonaut launch --profile devops).
 @example "agentonaut docs index status" { agentonaut docs index status }
 def "main docs index status" []: nothing -> nothing {
-    let pod_name = $env.agentonaut.cfg.agentonaut.podman.pod_name
     let mcp_profile = ($env.agentonaut.cfg.profile | profile get-nested "mcp" "docs-mcp-server")
-    let container_name = $"($pod_name)-($mcp_profile.container)"
+    let container_name = (docs-mcp-container-name)
 
     let exec_args = [
         "exec" "--workdir" "/app" $container_name
@@ -463,12 +460,12 @@ def "main image status" []: nothing -> nothing {
     $rows | table | print --raw
 }
 
-# Build a container image from a profile
-@example "agentonaut image build claude-contrib" { agentonaut image build claude-contrib }
+# Build a container image from a profile with the latest base image and software.
+# Upstream sources are downloaded first, and the build runs without cache.
+@example "agentonaut image build claude" { agentonaut image build claude }
 @example "agentonaut image build" { agentonaut image build }
 def "main image build" [
     profile_name?: string    # Profile to build. Omit to list available profiles.
-    --force-rebuild(-f)      # Rebuild even if the version has not changed
     --no-deps                # Skip building profile dependencies
 ]: nothing -> int {
 
@@ -495,7 +492,7 @@ def "main image build" [
         log info $"Resolving ($dependencies | length) dependencies for ($profile_name)..."
         for dep in $dependencies {
             log info $"Building dependency: ($dep)"
-            let dep_result = (main image build $dep --force-rebuild=$force_rebuild)
+            let dep_result = (main image build $dep)
             if $dep_result != 0 {
                 log error $"Failed to build dependency: ($dep)"
                 return 1
@@ -505,10 +502,8 @@ def "main image build" [
 
     log info $"Building profile: ($profile_name)"
 
-    # Check for upstream updates
     if ($profile | get --optional origin) == "upstream" {
-        log warning "Upstream profile detected. Sources are not updated automatically."
-        log info "To update, run: agentonaut git download by origin upstream"
+        main git download $profile_name
     }
 
     let image_tag = ($profile | get image_tag)
@@ -516,18 +511,21 @@ def "main image build" [
     let context = ($env.agentonaut.cfg.root_path | path join ($profile | get local_dir) ($profile | get context))
     let base_image_override = ($profile | get --optional base_image_override | default "")
 
-    let strategy = (version evaluate-build-requirement ($profile | get --optional version_check) $image_tag $force_rebuild)
+    # Profiles with version_check pass the latest upstream version as build arg
+    let version_check = ($profile | get --optional version_check)
+    let version_args = if ($version_check | is-not-empty) {
+        let latest_version = (
+            version fetch-latest
+                $version_check.repo
+                ($version_check | get --optional tag_pattern)
+        )
 
-    log info $strategy.reason
+        if ($latest_version | is-empty) {
+            log error $"Could not determine the latest version from ($version_check.repo)"
+            return 1
+        }
 
-    if not $strategy.should_build {
-        return 0
-    }
-
-    # Build image
-    let version_args = if ($strategy.version | is-not-empty) {
-        let build_arg_name = ($profile | get version_check | get build_arg)
-        {($build_arg_name): $strategy.version}
+        {($version_check.build_arg): $latest_version}
     } else {
         {}
     }
@@ -537,26 +535,17 @@ def "main image build" [
         | merge { TZ: (util get-host-timezone) }
     )
 
-    let build_result = if $force_rebuild {
-        (
-            podman build containerfile
-                $image_tag
-                $containerfile
-                $context
-                --base-image-override $base_image_override
-                --build-args $build_args
-                --no-cache
-        )
-    } else {
-        (
-            podman build containerfile
-                $image_tag
-                $containerfile
-                $context
-                --base-image-override $base_image_override
-                --build-args $build_args
-        )
-    }
+    # --no-cache reruns every step, so RUN steps that resolve "latest" at
+    # build time fetch the current release instead of reusing an old layer
+    let build_result = (
+        podman build containerfile
+            $image_tag
+            $containerfile
+            $context
+            --base-image-override $base_image_override
+            --build-args $build_args
+            --no-cache
+    )
 
     if $build_result == 0 {
         log info "Cleaning up after build..."
@@ -566,13 +555,11 @@ def "main image build" [
     $build_result
 }
 
-# Build all container images from profiles in config
+# Update upstream sources and rebuild all container images without cache,
+# so every image gets the latest base image and software versions
 @example "NU_LOG_LEVEL=debug agentonaut image build all" { NU_LOG_LEVEL=debug agentonaut image build all }
-@example "agentonaut image build all --force-rebuild" { agentonaut image build all --force-rebuild }
 @example "agentonaut image build all" { agentonaut image build all }
-def "main image build all" [
-    --force-rebuild(-f)  # Force rebuild even if versions haven't changed
-]: nothing -> nothing {
+def "main image build all" []: nothing -> nothing {
     log info "Building all container profiles..."
 
     let profiles = ($env.agentonaut.cfg.profile | profile list-by-type "container")
@@ -585,24 +572,18 @@ def "main image build all" [
     log info $"Found ($profiles | length) container profiles"
 
     $profiles | each {|profile|
-        if $force_rebuild {
-            main image build $profile.id --force-rebuild --no-deps
-        } else {
-            main image build $profile.id --no-deps
-        }
+        main image build $profile.id --no-deps
     }
 
     log info "All profiles built"
 }
 
 # Build container images filtered by field
-@example "agentonaut image build by origin upstream --force-rebuild" { agentonaut image build by origin upstream --force-rebuild }
 @example "agentonaut image build by origin upstream" { agentonaut image build by origin upstream }
 @example "agentonaut image build by origin local" { agentonaut image build by origin local }
 def "main image build by" [
     field?: string             # Filter field name (e.g., "origin")
     value?: string             # Filter value (e.g., "upstream", "local")
-    --force-rebuild(-f)        # Force rebuild even if versions haven't changed
 ]: nothing -> nothing {
     let container_profiles = ($env.agentonaut.cfg.profile | profile list-by-type "container")
 
@@ -633,11 +614,7 @@ def "main image build by" [
     log info $"Found ($profiles | length) profiles"
 
     $profiles | each {|p|
-        if $force_rebuild {
-            main image build $p.id --force-rebuild
-        } else {
-            main image build $p.id
-        }
+        main image build $p.id
     }
 
     log info "All profiles built"
@@ -645,7 +622,7 @@ def "main image build by" [
 
 # Remove a container image by profile name
 @example "agentonaut image remove" { agentonaut image remove }
-@example "agentonaut image remove claude-contrib" { agentonaut image remove claude-contrib }
+@example "agentonaut image remove claude" { agentonaut image remove claude }
 @example "agentonaut image remove claude --force" { agentonaut image remove claude --force }
 def "main image remove" [
     profile_name?: string    # Profile whose image to remove. Omit to list available profiles.
@@ -918,6 +895,113 @@ def validate-agent [
 }
 
 
+#
+# Pod name for an agent: "<pod_prefix>-<agent>"
+#
+# Each agent gets its own pod so that sessions do not replace one another.
+#
+def pod-name-for [
+    agent: string  # Agent profile id (e.g. claude, antigravity)
+]: nothing -> string {
+    $"($env.agentonaut.cfg.agentonaut.podman.pod_prefix)-($agent)"
+}
+
+
+#
+# Path of the rendered kube YAML for an agent
+#
+# Separate files keep parallel launches from overwriting each other's YAML.
+#
+def kube-tmp-path-for [
+    agent: string  # Agent profile id (e.g. claude, antigravity)
+]: nothing -> string {
+    $env.agentonaut.cfg.kube.tmp_dir | path join $"kube-($agent).yaml"
+}
+
+
+#
+# Full container name of the docs-mcp-server
+#
+# Resolves to the shared pod when the profile is marked shared, otherwise to
+# the sidecar inside the default agent's own pod.
+#
+def docs-mcp-container-name []: nothing -> string {
+    let mcp_profile = ($env.agentonaut.cfg.profile | profile get-nested "mcp" "docs-mcp-server")
+    let is_shared = ($mcp_profile | get --optional shared | default false)
+
+    let pod_name = if $is_shared {
+        $env.agentonaut.cfg.agentonaut.podman.shared_pod_name
+    } else {
+        pod-name-for $env.agentonaut.cfg.agentonaut.default_agent
+    }
+
+    $"($pod_name)-($mcp_profile.container)"
+}
+
+
+#
+# Start the shared MCP pod if it is not already running
+#
+# The pod is long-lived: it survives agent sessions and is reused by every
+# agent, so it is only created when missing and never replaced implicitly.
+#
+def "shared-pod ensure" [
+    shared_mcps: list  # MCP entries with shared = true
+    cfg_data: record   # Rendered template data from launch
+]: nothing -> nothing {
+    let pod_name = $env.agentonaut.cfg.agentonaut.podman.shared_pod_name
+
+    # "exists" is also true for a stopped pod, so check the actual state:
+    # a stopped shared pod must be restarted, otherwise the agent registers
+    # MCP URLs that resolve to a pod serving nothing.
+    if (^podman pod exists $pod_name | complete).exit_code == 0 {
+        let state = (
+            ^podman pod inspect $pod_name --format "{{.State}}" | complete
+        )
+
+        if $state.exit_code == 0 and ($state.stdout | str trim) == "Running" {
+            log info $"Shared MCP pod already running: ($pod_name)"
+            return
+        }
+
+        log info $"Shared MCP pod exists but is not running, starting it: ($pod_name)"
+        let start_result = (^podman pod start $pod_name | complete)
+
+        if $start_result.exit_code != 0 {
+            log error $"Failed to start existing shared MCP pod: ($start_result.stderr | str trim)"
+            error make {msg: $"Failed to start shared MCP pod: ($pod_name)"}
+        }
+
+        log info $"Shared MCP pod started: ($pod_name)"
+        return
+    }
+
+    log info $"Starting shared MCP pod: ($pod_name)"
+
+    let template_path = (
+        $env.agentonaut.cfg.root_path
+        | path join $env.agentonaut.cfg.kube.template_dir $env.agentonaut.cfg.kube.shared_template
+    )
+    let tmp_file_path = ($env.agentonaut.cfg.kube.tmp_dir | path join "kube-shared.yaml")
+
+    podman kube render template $template_path ($cfg_data | merge {mcps: $shared_mcps}) $tmp_file_path
+
+    let play_result = (
+        ^podman kube play
+            --network $env.agentonaut.cfg.agentonaut.podman.network
+            $tmp_file_path
+        | complete
+    )
+
+    if $play_result.exit_code != 0 {
+        log error $"Failed to start shared MCP pod: ($play_result.stderr | str trim)"
+        error make {msg: $"Failed to start shared MCP pod: ($pod_name)"}
+    }
+
+    log info $"Shared MCP pod started: ($pod_name)"
+}
+
+
 # Copy addons (skills, commands, hooks) for an agent to its data directory
 @example "agentonaut agent setup claude" { agentonaut agent setup claude }
 @example "agentonaut agent setup gemini" { agentonaut agent setup gemini }
@@ -997,12 +1081,17 @@ def "main agent setup" [
 @example "agentonaut launch ~/my-project --agent <agent>" { agentonaut launch ~/my-project --agent <agent> }
 @example "agentonaut launch ~/my-project --agent gemini" { agentonaut launch ~/my-project --agent gemini }
 @example "agentonaut launch ~/my-project" { agentonaut launch ~/my-project }
+@example "agentonaut launch ~/my-project --dangerously-skip-permissions" { agentonaut launch ~/my-project --dangerously-skip-permissions }
+@example "agentonaut launch ~/my-project --model gemini-2.5-pro --prompt 'Run tests'" { agentonaut launch ~/my-project --model gemini-2.5-pro --prompt 'Run tests' }
 def "main launch" [
     workspace_path: string              # Project directory to mount as workspace
     --name(-n): string = ""             # Container name override (default: derived from profile)
     --agent(-a): string = ""            # Agent to use (default: agentonaut.default_agent in config)
     --profile(-r): string = ""          # Kube profile name (default: kube.default_profile in config)
     --add-workspace(-w): any = []       # Additional paths to mount (use a list [p1, p2] for multiple paths)
+    --dangerously-skip-permissions      # Skip interactive permissions in agent CLI
+    --model(-m): string = ""            # Model to use for the agent
+    --prompt(-p): string = ""           # Prompt to execute (non-interactive mode)
 ]: nothing -> nothing {
 
     let add_workspace = if ($add_workspace | describe | str starts-with "string") {
@@ -1043,16 +1132,25 @@ def "main launch" [
     }
 
     let agent_home_dir = $container_profile.home_path
-    let agent_config_path_expanded = ($agent_profile.config_path | path expand)
+
+    # config_path and mcp_command are optional: agents that keep their entire
+    # state inside data_path_container omit both.
+    let agent_config_path_expanded = (
+        $agent_profile
+        | get --optional config_path
+        | default ""
+        | if ($in | is-empty) { "" } else { $in | path expand }
+    )
+
     let agent_data = {
         agent_name: $agent_profile.id
         agent_data_path_host: ($agent_profile.data_path_host | path expand)
         agent_config_path: $agent_config_path_expanded
-        agent_mcp_command: $agent_profile.mcp_command
+        agent_mcp_command: ($agent_profile | get --optional mcp_command | default "")
         agent_data_path_container: $agent_profile.data_path_container
         agent_workspace_env: "WORKSPACE"
         agent_config_mount_path: (
-            if ($agent_config_path_expanded | path exists) {
+            if ($agent_config_path_expanded | is-not-empty) and ($agent_config_path_expanded | path exists) {
                 $"($agent_home_dir)/.($agent_profile.id).json"
             } else {
                 ""
@@ -1158,9 +1256,20 @@ def "main launch" [
                 local_id: $mcp_local_id
                 container_name: $container_data.container_name
                 args: $container_data.args
+                shared: ($mcp_data | get --optional shared | default false)
             }
         }
     )
+
+    # Shared MCPs live in the long-lived shared pod, local ones are rendered as
+    # sidecars into this agent's pod. Both stay in the list handed to the agent
+    # for registration, since the agent talks to them the same way.
+    let local_mcps = ($mcps_data | where not shared)
+    let shared_mcps = ($mcps_data | where shared)
+
+    # One pod per agent, so several agents can run side by side
+    let pod_name = (pod-name-for $agent_profile.id)
+    let tmp_file_path = (kube-tmp-path-for $agent_profile.id)
 
     # Merge all data for template
     let cfg_data = (
@@ -1168,30 +1277,46 @@ def "main launch" [
         | cfg extract --starts-with --output-separator "_"
             "agentonaut.podman"
             "kube.default_profile"
-            "kube.tmp_file_path"
             "kube.template_dir"
         | merge $agent_data
         | merge $container_data
         | merge $workspace_data
         | merge $additional_volumes
         | merge {
+            pod_name: $pod_name
             mcps: $mcps_data
+            local_mcps: $local_mcps
+            shared_mcps: $shared_mcps
             additional_workspaces: $additional_workspaces
+            agent_skip_permissions: $dangerously_skip_permissions
+            agent_model: $model
+            agent_prompt: $prompt
         }
     )
+
+    # Ensure network exists before any pod joins it
+    podman network ensure $env.agentonaut.cfg.agentonaut.podman.network
+
+    # Start the shared MCP pod first, so its DNS name resolves for this agent
+    if ($shared_mcps | is-not-empty) {
+        shared-pod ensure $shared_mcps $cfg_data
+    }
 
     # Render master pod template
     log info "Rendering pod YAML..."
     let master_template_path = ($env.agentonaut.cfg.root_path | path join $env.agentonaut.cfg.kube.template_dir "pod.yaml.j2")
-    podman kube render template $master_template_path $cfg_data $env.agentonaut.cfg.kube.tmp_file_path
-
-    # Ensure network exists
-    podman network ensure $env.agentonaut.cfg.agentonaut.podman.network
+    podman kube render template $master_template_path $cfg_data $tmp_file_path
 
     # Execute podman kube play
-    log info "Starting pod with podman kube play..."
+    log info $"Starting pod ($pod_name) with podman kube play..."
     log warning "First start may take several minutes (--userns=keep-id ownership mapping)."
-    let play_result = (^podman kube play --replace $env.agentonaut.cfg.kube.tmp_file_path | complete)
+    let play_result = (
+        ^podman kube play
+            --replace
+            --network $env.agentonaut.cfg.agentonaut.podman.network
+            $tmp_file_path
+        | complete
+    )
 
     if $play_result.exit_code != 0 {
         log error $"Failed to start pod: ($play_result.stderr | str trim)"
@@ -1206,20 +1331,21 @@ def "main launch" [
     log info "Attaching to container..."
 
     # Build full container name: pod_name-container_name (deterministic)
-    let full_container_name = $"($env.agentonaut.cfg.agentonaut.podman.pod_name)-($container_name)"
+    let full_container_name = $"($pod_name)-($container_name)"
 
     # Attach to container
     podman run attach $full_container_name
 
-    # Cleanup after session ends
+    # Cleanup after session ends. Only this agent's pod is removed; other agent
+    # pods and the shared MCP pod keep running.
     log info "Cleaning up pod..."
 
     try {
-        podman pod stop $env.agentonaut.cfg.agentonaut.podman.pod_name
-        podman pod rm $env.agentonaut.cfg.agentonaut.podman.pod_name
-        log info "Pod removed"
+        podman pod stop $pod_name
+        podman pod rm $pod_name
+        log info $"Pod removed: ($pod_name)"
     } catch {
-        log warning $"Could not remove pod ($env.agentonaut.cfg.agentonaut.podman.pod_name) - may already be stopped"
+        log warning $"Could not remove pod ($pod_name) - may already be stopped"
     }
 
 }
@@ -1227,8 +1353,14 @@ def "main launch" [
 # Start an agent session stored under chat.base_path/<date> from config.toml
 @example "agentonaut chat --agent <agent>" { agentonaut chat --agent <agent> }
 @example "agentonaut chat" { agentonaut chat }
+@example "agentonaut chat --dangerously-skip-permissions" { agentonaut chat --dangerously-skip-permissions }
+@example "agentonaut chat --prompt 'Analyze latest changes'" { agentonaut chat --prompt 'Analyze latest changes' }
 def "main chat" [
-    --agent(-a): string = ""  # Agent to use (default: agentonaut.default_agent in config)
+    --agent(-a): string = ""            # Agent to use (default: agentonaut.default_agent in config)
+    --profile(-r): string = ""          # Kube profile name (default: kube.default_profile in config)
+    --dangerously-skip-permissions      # Skip interactive permissions in agent CLI
+    --model(-m): string = ""            # Model to use for the agent
+    --prompt(-p): string = ""           # Prompt to execute (non-interactive mode)
 ]: nothing -> nothing {
 
     let agent = if ($agent | is-empty) {
@@ -1254,14 +1386,41 @@ def "main chat" [
 
     let chat_dir_abs = ($chat_dir | path expand)
 
-    main launch $chat_dir_abs --agent $agent
+    main launch $chat_dir_abs --agent $agent --profile $profile --dangerously-skip-permissions=$dangerously_skip_permissions --model $model --prompt $prompt
 }
 
 
-# Stop and remove the pod started by the last launch or chat command
+# Stop and remove an agent's pod started by launch or chat
+#
+# Only the selected agent's pod is removed. Other agent pods and the shared MCP
+# pod keep running; use --shared to remove the shared pod instead.
 @example "agentonaut abort" { agentonaut abort }
-def "main abort" []: nothing -> nothing {
-    let pod_name = $env.agentonaut.cfg.agentonaut.podman.pod_name
+@example "agentonaut abort --agent claude" { agentonaut abort --agent claude }
+@example "agentonaut abort --shared" { agentonaut abort --shared }
+def "main abort" [
+    --agent(-a): string = ""  # Agent whose pod to remove (default: agentonaut.default_agent in config)
+    --shared(-s)              # Remove the shared MCP pod instead of an agent pod
+]: nothing -> nothing {
+    if $shared and ($agent | is-not-empty) {
+        error make {
+            msg: "--shared and --agent are mutually exclusive"
+            help: "The shared MCP pod is not tied to an agent. Use either --shared or --agent."
+        }
+    }
+
+    let pod_name = if $shared {
+        $env.agentonaut.cfg.agentonaut.podman.shared_pod_name
+    } else {
+        let agent = if ($agent | is-empty) {
+            $env.agentonaut.cfg.agentonaut.default_agent
+        } else {
+            $agent
+        }
+
+        validate-agent $agent
+        pod-name-for $agent
+    }
+
     log info $"Stopping pod ($pod_name)..."
 
     let stop_result = (^podman pod stop $pod_name | complete)
@@ -1421,12 +1580,16 @@ def "main host check" [
         | cfg extract nested "profile.agent" $agent_profile.id
     )
     let agent_data_path_host = ($agent_profile.data_path_host | path expand)
-    let agent_config_path = $agent_profile_expanded.config_path
-    let agent_config_dir = ($agent_config_path | path dirname)
 
-    let config_exists = ($agent_config_dir | path exists)
+    # Agents without a separate config file (config_path unset) keep their
+    # state inside data_path_host alone.
+    let agent_config_path = ($agent_profile_expanded | get --optional config_path | default "")
+    let has_config = ($agent_config_path | is-not-empty)
+    let agent_config_dir = if $has_config { $agent_config_path | path dirname } else { "" }
+
+    let config_exists = (not $has_config) or ($agent_config_dir | path exists)
     let data_exists = ($agent_data_path_host | path exists)
-    let file_exists = ($agent_config_path | path exists)
+    let file_exists = (not $has_config) or ($agent_config_path | path exists)
 
     if not $config_exists or not $data_exists or not $file_exists {
         log error $"Agent directories not set up for: ($agent)"
@@ -1449,9 +1612,11 @@ def "main host check" [
     }
 
     log info $"Host setup verified for agent: ($agent)"
-    log info $"  Config dir: ($agent_config_dir)"
     log info $"  Data path: ($agent_data_path_host)"
-    log info $"  Config file: ($agent_config_path)"
+    if $has_config {
+        log info $"  Config dir: ($agent_config_dir)"
+        log info $"  Config file: ($agent_config_path)"
+    }
 }
 
 # Create agent config and data directories and generate config.toml from the skeleton
@@ -1487,14 +1652,24 @@ def "main host setup" []: nothing -> nothing {
             | cfg extract nested "profile.agent" $agent_profile.id
         )
         let agent_data_path_host = ($agent_profile.data_path_host | path expand)
-        let agent_config_path = $agent_profile_expanded.config_path
-        let agent_config_dir = ($agent_config_path | path dirname)
+        let agent_config_path = ($agent_profile_expanded | get --optional config_path | default "")
 
-        if not ($agent_config_dir | path exists) {
-            log info $"Creating config directory: ($agent_config_dir)"
-            try { mkdir $agent_config_dir }
-        } else {
-            log info $"Config directory already exists: ($agent_config_dir)"
+        if ($agent_config_path | is-not-empty) {
+            let agent_config_dir = ($agent_config_path | path dirname)
+
+            if not ($agent_config_dir | path exists) {
+                log info $"Creating config directory: ($agent_config_dir)"
+                try { mkdir $agent_config_dir }
+            } else {
+                log info $"Config directory already exists: ($agent_config_dir)"
+            }
+
+            if not ($agent_config_path | path exists) {
+                log info $"Creating config file: ($agent_config_path)"
+                try { "{}" | save --force $agent_config_path }
+            } else {
+                log info $"Config file already exists: ($agent_config_path)"
+            }
         }
 
         if not ($agent_data_path_host | path exists) {
@@ -1502,13 +1677,6 @@ def "main host setup" []: nothing -> nothing {
             try { mkdir $agent_data_path_host }
         } else {
             log info $"Data path already exists: ($agent_data_path_host)"
-        }
-
-        if not ($agent_config_path | path exists) {
-            log info $"Creating config file: ($agent_config_path)"
-            try { "{}" | save --force $agent_config_path }
-        } else {
-            log info $"Config file already exists: ($agent_config_path)"
         }
     }
 
@@ -1538,7 +1706,7 @@ def "main host setup" []: nothing -> nothing {
 
 # Agentonaut
 #
-# Manage and run AI agents (Claude Code, Gemini) in isolated Podman containers.
+# Manage and run AI agents (Claude Code, Antigravity) in isolated Podman containers.
 # Agents are configured via profiles and run with optional MCP server support.
 #
 @example "agentonaut launch ~/Projects/my-project" { agentonaut launch ~/Projects/my-project }

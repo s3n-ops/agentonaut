@@ -1,5 +1,5 @@
 # Build stage for nu_plugin_formats
-FROM rust:slim AS nu-plugin-builder
+FROM docker.io/library/rust:slim AS nu-plugin-builder
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
@@ -17,7 +17,7 @@ RUN rustup update stable \
     && cargo install nu-lint --locked
 
 # Main stage
-FROM debian:trixie-slim
+FROM docker.io/library/debian:trixie-slim
 
 USER root
 
@@ -113,6 +113,15 @@ RUN GITLEAKS_VERSION=$(curl -s https://api.github.com/repos/gitleaks/gitleaks/re
     && tar xzf "gitleaks_${GITLEAKS_VERSION#v}_linux_x64.tar.gz" \
     && mv gitleaks /usr/local/bin/ \
     && rm -rf "gitleaks_${GITLEAKS_VERSION#v}"*
+
+# Install latest Nickel from GitHub releases.
+# The release ships a static binary without a checksum file, so there is
+# nothing to verify against here.
+RUN NICKEL_VERSION=$(curl -sL https://api.github.com/repos/nickel-lang/nickel/releases/latest | jq -r .tag_name) \
+    && curl -fsSL -o /usr/local/bin/nickel \
+        "https://github.com/nickel-lang/nickel/releases/download/${NICKEL_VERSION}/nickel-x86_64-linux" \
+    && chmod +x /usr/local/bin/nickel \
+    && nickel --version
 
 COPY --from=nu-plugin-builder /usr/local/cargo/bin/nu_plugin_formats /usr/local/bin/nu_plugin_formats
 COPY --from=nu-plugin-builder /usr/local/cargo/bin/nu-lint /usr/local/bin/nu-lint

@@ -1,0 +1,34 @@
+---
+#
+# Shared MCP pod
+#
+# Long-lived pod holding agent-neutral MCP servers. Agent pods reach it by pod
+# name over the agentonaut network, so it must be started before them and is
+# not torn down when an agent session ends.
+#
+apiVersion: v1
+kind: Pod
+metadata:
+  name: {{ agentonaut_podman_shared_pod_name }}
+  labels:
+    app: agentonaut-shared
+  annotations:
+    io.podman.annotations.userns: keep-id
+{% for mcp in mcps %}
+    container.apparmor.security.beta.kubernetes.io/{{ mcp.container_name }}: unconfined
+    container.seccomp.security.alpha.kubernetes.io/{{ mcp.container_name }}: unconfined
+{% endfor %}
+spec:
+  containers:
+{% for mcp in mcps %}
+{% include "containers/" + mcp.local_id + ".yaml.j2" %}
+{% endfor %}
+
+  volumes:
+{% for mcp in mcps %}
+{% include "volumes/" + mcp.local_id + ".yaml.j2" %}
+{% endfor %}
+
+  restartPolicy: Always
+  dnsPolicy: ClusterFirst
+  shareProcessNamespace: false

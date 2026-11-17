@@ -1,6 +1,6 @@
 # Nushell MCP Server - Native HTTP Transport
 
-FROM debian:trixie-slim
+FROM docker.io/library/debian:trixie-slim
 
 LABEL org.opencontainers.image.title="Nushell MCP Server"
 LABEL org.opencontainers.image.description="Nushell MCP Server with native HTTP transport"
